@@ -90,7 +90,7 @@ export class ConversationsService {
 
     // OPERADORES só veem suas próprias conversas
     if (user && user.role === 'OPERATOR') {
-      where.operatorId = user.userId;
+      where.operatorId = user.id;
     }
 
     const [data, total] = await this.prisma.$transaction([

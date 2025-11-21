@@ -5,7 +5,7 @@ import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { Public } from '../common/decorators/public.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { AuthenticatedUser } from '../common/interfaces/authenticated-user.interface';
+import type { AuthenticatedUser } from '../common/interfaces/authenticated-user.interface';
 
 @Controller('auth')
 export class AuthController {

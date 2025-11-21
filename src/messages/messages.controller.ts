@@ -13,7 +13,7 @@ import { ListMessagesQueryDto } from './dto/list-messages-query.dto';
 import { Roles } from '../common/decorators/roles.decorator';
 import { Role } from '../common/enums/role.enum';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { AuthenticatedUser } from '../common/interfaces/authenticated-user.interface';
+import type { AuthenticatedUser } from '../common/interfaces/authenticated-user.interface';
 
 @Controller('messages')
 export class MessagesController {
@@ -25,7 +25,7 @@ export class MessagesController {
     @CurrentUser() user: AuthenticatedUser,
     @Body() sendDto: SendMessageDto,
   ) {
-    return this.messagesService.send(user.userId, sendDto);
+    return this.messagesService.send(user.id, sendDto);
   }
 
   @Get('conversation/:conversationId')

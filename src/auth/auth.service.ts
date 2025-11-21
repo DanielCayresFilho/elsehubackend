@@ -97,19 +97,19 @@ export class AuthService {
 
     const accessExpires = this.configService.get<string>(
       'jwt.access.expiresIn',
-    );
+    ) ?? '900s';
     const refreshExpires = this.configService.get<string>(
       'jwt.refresh.expiresIn',
-    );
+    ) ?? '7d';
 
     const [accessToken, refreshToken] = await Promise.all([
       this.jwtService.signAsync(payload, {
-        secret: this.configService.get<string>('jwt.access.secret'),
-        expiresIn: accessExpires,
+        secret: this.configService.get<string>('jwt.access.secret') ?? 'change-me-access',
+        expiresIn: accessExpires as any,
       }),
       this.jwtService.signAsync(payload, {
-        secret: this.configService.get<string>('jwt.refresh.secret'),
-        expiresIn: refreshExpires,
+        secret: this.configService.get<string>('jwt.refresh.secret') ?? 'change-me-refresh',
+        expiresIn: refreshExpires as any,
       }),
     ]);
 

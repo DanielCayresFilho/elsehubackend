@@ -25,7 +25,7 @@ export class TemplatesService {
         body: payload.body,
         metaTemplateId: payload.metaTemplateId,
         language: payload.language ?? 'pt_BR',
-        variables: payload.variables ?? null,
+        variables: payload.variables ?? undefined,
         serviceInstanceId: payload.serviceInstanceId,
       },
       include: {

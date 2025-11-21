@@ -179,6 +179,9 @@ export class ContactsService {
         processedRows: 0,
         created: 0,
         skipped: parsed.totalRows,
+        storedFilePath: savedFile.relativePath,
+        storedFileName: savedFile.filename,
+        storedFileSize: savedFile.size,
         errors: parsed.errors,
       };
     }

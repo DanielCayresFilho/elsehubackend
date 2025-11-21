@@ -16,9 +16,9 @@ import { JwtAccessStrategy } from './strategies/jwt-access.strategy';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
-        secret: configService.get<string>('jwt.access.secret'),
+        secret: configService.get<string>('jwt.access.secret') ?? 'change-me-access',
         signOptions: {
-          expiresIn: configService.get<string>('jwt.access.expiresIn'),
+          expiresIn: (configService.get<string>('jwt.access.expiresIn') ?? '900s') as any,
         },
       }),
     }),

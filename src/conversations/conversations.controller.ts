@@ -18,7 +18,7 @@ import { ListConversationsQueryDto } from './dto/list-conversations-query.dto';
 import { Roles } from '../common/decorators/roles.decorator';
 import { Role } from '../common/enums/role.enum';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { AuthenticatedUser } from '../common/interfaces/authenticated-user.interface';
+import type { AuthenticatedUser } from '../common/interfaces/authenticated-user.interface';
 
 @Controller('conversations')
 export class ConversationsController {
@@ -70,7 +70,7 @@ export class ConversationsController {
   ) {
     return this.conversationsService.closeConversation(
       id,
-      user.userId,
+      user.id,
       closeDto,
     );
   }

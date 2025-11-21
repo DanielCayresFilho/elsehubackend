@@ -36,10 +36,10 @@ import { RolesGuard } from './common/guards/roles.guard';
     }),
     ThrottlerModule.forRootAsync({
       inject: [ConfigService],
-      useFactory: (configService: ConfigService) => ({
-        ttl: configService.get<number>('throttler.ttl') ?? 60,
+      useFactory: (configService: ConfigService) => [{
+        ttl: configService.get<number>('throttler.ttl') ?? 60000,
         limit: configService.get<number>('throttler.limit') ?? 30,
-      }),
+      }],
     }),
     PrismaModule,
     StorageModule,

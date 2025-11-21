@@ -16,7 +16,7 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { Role } from '../common/enums/role.enum';
 import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { AuthenticatedUser } from '../common/interfaces/authenticated-user.interface';
+import type { AuthenticatedUser } from '../common/interfaces/authenticated-user.interface';
 
 @Controller('users')
 export class UsersController {

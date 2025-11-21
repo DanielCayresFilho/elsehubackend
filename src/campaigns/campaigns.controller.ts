@@ -18,7 +18,7 @@ import { CreateCampaignDto } from './dto/create-campaign.dto';
 import { Roles } from '../common/decorators/roles.decorator';
 import { Role } from '../common/enums/role.enum';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { AuthenticatedUser } from '../common/interfaces/authenticated-user.interface';
+import type { AuthenticatedUser } from '../common/interfaces/authenticated-user.interface';
 
 @Controller('campaigns')
 export class CampaignsController {
@@ -30,7 +30,7 @@ export class CampaignsController {
     @CurrentUser() user: AuthenticatedUser,
     @Body() createDto: CreateCampaignDto,
   ) {
-    return this.campaignsService.create(user.userId, createDto);
+    return this.campaignsService.create(user.id, createDto);
   }
 
   @Post(':id/upload')

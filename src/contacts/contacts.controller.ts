@@ -24,7 +24,7 @@ import { UpdateContactDto } from './dto/update-contact.dto';
 import { ListContactsQueryDto } from './dto/list-contacts-query.dto';
 import { Roles } from '../common/decorators/roles.decorator';
 import { Role } from '../common/enums/role.enum';
-import { UploadedCsvFile } from './types/uploaded-csv-file.type';
+import type { UploadedCsvFile } from './types/uploaded-csv-file.type';
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 

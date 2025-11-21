@@ -182,6 +182,8 @@ model Campaign {
   scheduledAt       DateTime?
   startedAt         DateTime?
   finishedAt        DateTime?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
 
   // Configurações de envio
   delaySeconds      Int            @default(120) // 1 mensagem a cada 2 minutos (120s)
