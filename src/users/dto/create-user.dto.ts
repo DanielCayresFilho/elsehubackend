@@ -24,5 +24,5 @@ export class CreateUserDto {
 
   @IsOptional()
   @IsBoolean()
-  active?: boolean;
+  isActive?: boolean;
 }

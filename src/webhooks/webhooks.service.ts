@@ -335,7 +335,7 @@ export class WebhooksService {
     const operators = await this.prisma.user.findMany({
       where: {
         isOnline: true,
-        active: true,
+        isActive: true,
         role: { in: ['OPERATOR', 'SUPERVISOR'] },
       },
       orderBy: [

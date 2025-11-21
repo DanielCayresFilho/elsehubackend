@@ -27,7 +27,7 @@ export class UsersService {
         email: payload.email,
         password: hashedPassword,
         role: payload.role,
-        active: payload.active ?? true,
+        isActive: payload.isActive ?? true,
       },
     });
 
@@ -93,7 +93,7 @@ export class UsersService {
         name: payload.name ?? user.name,
         email: payload.email ?? user.email,
         role: payload.role ?? user.role,
-        active: payload.active ?? user.active,
+        isActive: payload.isActive ?? user.isActive,
         password,
       },
     });
@@ -125,7 +125,7 @@ export class UsersService {
     const operators = await this.prisma.user.findMany({
       where: {
         isOnline: true,
-        active: true,
+        isActive: true,
         role: { in: ['OPERATOR', 'SUPERVISOR'] },
       },
       orderBy: {

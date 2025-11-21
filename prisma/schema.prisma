@@ -53,7 +53,7 @@ model User {
   email     String   @unique
   password  String   // Lembrar de hashear
   role      Role     @default(OPERATOR)
-  active    Boolean  @default(true)
+  isActive  Boolean  @default(true)
   
   // Status de Disponibilidade para Atendimento
   isOnline      Boolean   @default(false)

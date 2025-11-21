@@ -5,7 +5,7 @@ export class UserResponseDto {
   name: string;
   email: string;
   role: Role;
-  active: boolean;
+  isActive: boolean;
   isOnline: boolean;
   onlineSince: Date | null;
   lastConversationAssignedAt: Date | null;

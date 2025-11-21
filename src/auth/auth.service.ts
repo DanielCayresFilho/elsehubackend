@@ -25,7 +25,7 @@ export class AuthService {
       where: { email: payload.email },
     });
 
-    if (!user || !user.active) {
+    if (!user || !user.isActive) {
       throw new UnauthorizedException('Credenciais inválidas');
     }
 
@@ -59,7 +59,7 @@ export class AuthService {
         where: { id: decoded.sub },
       });
 
-      if (!user || !user.active) {
+      if (!user || !user.isActive) {
         throw new UnauthorizedException('Usuário não encontrado ou inativo');
       }
 

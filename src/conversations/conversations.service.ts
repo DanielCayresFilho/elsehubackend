@@ -170,7 +170,7 @@ export class ConversationsService {
       throw new NotFoundException('Operador não encontrado');
     }
 
-    if (!operator.active) {
+    if (!operator.isActive) {
       throw new BadRequestException('Operador inativo');
     }
 
