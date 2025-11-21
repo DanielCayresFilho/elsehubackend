@@ -40,9 +40,9 @@ COPY --from=builder /usr/src/app/node_modules/@prisma ./node_modules/@prisma
 # Copy built application
 COPY --from=builder /usr/src/app/dist ./dist
 
-# Verify dist exists
-RUN ls -la dist/ && test -f dist/main.js
+# Verify build output
+RUN ls -la dist/src/ && test -f dist/src/main.js
 
 EXPOSE 3000
 
-CMD ["node", "dist/main.js"]
+CMD ["node", "dist/src/main.js"]
