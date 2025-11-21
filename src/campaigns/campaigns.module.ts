@@ -15,6 +15,7 @@ import { StorageModule } from '../storage/storage.module';
         connection: {
           host: configService.get<string>('redis.host'),
           port: configService.get<number>('redis.port'),
+          password: configService.get<string>('redis.password'),
         },
         prefix: configService.get<string>('bullmq.prefix'),
       }),
