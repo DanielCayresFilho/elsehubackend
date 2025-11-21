@@ -17,6 +17,9 @@ COPY tsconfig*.json nest-cli.json ./
 COPY src ./src
 RUN npm run build
 
+# Compile seed script
+RUN npx tsc prisma/seed.ts --outDir prisma --skipLibCheck
+
 # Verify build output
 RUN ls -la dist/
 
@@ -37,8 +40,9 @@ COPY prisma ./prisma
 COPY --from=builder /usr/src/app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /usr/src/app/node_modules/@prisma ./node_modules/@prisma
 
-# Copy built application
+# Copy built application and compiled seed
 COPY --from=builder /usr/src/app/dist ./dist
+COPY --from=builder /usr/src/app/prisma/seed.js ./prisma/seed.js
 
 # Verify build output
 RUN ls -la dist/src/ && test -f dist/src/main.js
