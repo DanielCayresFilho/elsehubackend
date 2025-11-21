@@ -34,9 +34,6 @@ async function bootstrap() {
     }),
   );
 
-  const prismaService = app.get(PrismaService);
-  prismaService.enableShutdownHooks(app);
-
   await app.listen(configService.get<number>('port') ?? 3000);
 }
 void bootstrap();
