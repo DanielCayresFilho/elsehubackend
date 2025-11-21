@@ -1,43 +1,48 @@
 # syntax=docker/dockerfile:1.7
 
-FROM node:22-alpine AS base
+# Stage 1: Build
+FROM node:22-alpine AS builder
 WORKDIR /usr/src/app
 
+# Install dependencies
 COPY package*.json ./
 RUN npm install --legacy-peer-deps
 
+# Generate Prisma Client
 COPY prisma ./prisma
 RUN npx prisma generate
 
-FROM base AS development
-ENV NODE_ENV=development
-
+# Copy source and build
 COPY tsconfig*.json nest-cli.json ./
 COPY src ./src
-
-CMD ["npm", "run", "start:dev"]
-
-FROM base AS build
-ENV NODE_ENV=production
-
-COPY tsconfig*.json nest-cli.json ./
-COPY src ./src
-
 RUN npm run build
 
+# Verify build output
+RUN ls -la dist/
+
+# Stage 2: Production
 FROM node:22-alpine AS production
 WORKDIR /usr/src/app
+
 ENV NODE_ENV=production
 
+# Install production dependencies
 COPY package*.json ./
 RUN npm install --omit=dev --legacy-peer-deps
 
+# Copy prisma schema
 COPY prisma ./prisma
-COPY --from=base /usr/src/app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=base /usr/src/app/node_modules/@prisma ./node_modules/@prisma
 
-COPY --from=build /usr/src/app/dist ./dist
+# Copy Prisma Client from builder
+COPY --from=builder /usr/src/app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /usr/src/app/node_modules/@prisma ./node_modules/@prisma
+
+# Copy built application
+COPY --from=builder /usr/src/app/dist ./dist
+
+# Verify dist exists
+RUN ls -la dist/ && test -f dist/main.js
 
 EXPOSE 3000
-CMD ["node", "dist/main.js"]
 
+CMD ["node", "dist/main.js"]
