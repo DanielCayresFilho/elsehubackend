@@ -33,7 +33,8 @@ COPY package*.json ./
 RUN npm install --omit=dev --legacy-peer-deps
 
 COPY prisma ./prisma
-RUN npx prisma generate
+COPY --from=base /usr/src/app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=base /usr/src/app/node_modules/@prisma ./node_modules/@prisma
 
 COPY --from=build /usr/src/app/dist ./dist
 
