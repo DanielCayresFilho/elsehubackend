@@ -1,0 +1,253 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Enums para Controle de Acesso e Lógica de Negócio
+enum Role {
+  ADMIN
+  SUPERVISOR
+  OPERATOR
+}
+
+enum InstanceProvider {
+  OFFICIAL_META
+  EVOLUTION_API
+}
+
+enum MessageDirection {
+  INBOUND  // Cliente enviou
+  OUTBOUND // Operador/Sistema enviou
+}
+
+enum MessageVia {
+  INBOUND
+  CAMPAIGN
+  CHAT_MANUAL
+}
+
+enum ChatStatus {
+  OPEN
+  CLOSED
+}
+
+enum CampaignStatus {
+  PENDING
+  PROCESSING
+  PAUSED
+  COMPLETED
+  FAILED
+}
+
+// Tabela de Usuários
+model User {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  password  String   // Lembrar de hashear
+  role      Role     @default(OPERATOR)
+  active    Boolean  @default(true)
+  
+  // Status de Disponibilidade para Atendimento
+  isOnline      Boolean   @default(false)
+  onlineSince   DateTime?
+  lastConversationAssignedAt DateTime?
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relacionamentos
+  messagesSent     Message[]
+  conversations    Conversation[]
+  managedCampaigns Campaign[]
+  closedChats      FinishedConversation[]
+
+  @@map("users")
+}
+
+// Tabela de Contatos
+model Contact {
+  id          String   @id @default(uuid())
+  name        String
+  phone       String   @unique // Formato E.164
+  cpf         String?
+  additional1 String?
+  additional2 String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relacionamentos
+  conversations    Conversation[]
+  campaignItems    CampaignItem[]
+  finishedChats    FinishedConversation[]
+
+  @@map("contacts")
+}
+
+// Tabela de Serviços (Instâncias / Canais)
+model ServiceInstance {
+  id           String           @id @default(uuid())
+  name         String
+  provider     InstanceProvider
+  
+  // Dados Específicos (JSON para flexibilidade entre Meta/Evolution)
+  // Meta: WABA ID, Phone ID, Token
+  // Evolution: Instance Name, Token, Server URL
+  credentials  Json             
+  
+  isActive     Boolean          @default(true)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  conversations Conversation[]
+  campaigns     Campaign[]
+  templates     Template[]
+
+  @@map("service_instances")
+}
+
+// Tabela de Templates (Mensagens pré-aprovadas ou prontas)
+model Template {
+  id                String   @id @default(uuid())
+  name              String
+  body              String   @db.Text
+  metaTemplateId    String?  // ID na Meta se for oficial
+  language          String?  // pt_BR
+  variables         Json?    // Estrutura das variáveis
+  serviceInstanceId String
+  
+  serviceInstance   ServiceInstance @relation(fields: [serviceInstanceId], references: [id])
+  campaigns         Campaign[]
+
+  @@map("templates")
+}
+
+// Tabela de Conversas Ativas
+model Conversation {
+  id                String     @id @default(uuid())
+  contactId         String
+  serviceInstanceId String
+  operatorId        String?    // Pode ser nulo se estiver na fila/bot
+  status            ChatStatus @default(OPEN)
+  startTime         DateTime   @default(now())
+  
+  contact         Contact         @relation(fields: [contactId], references: [id])
+  serviceInstance ServiceInstance @relation(fields: [serviceInstanceId], references: [id])
+  operator        User?           @relation(fields: [operatorId], references: [id])
+  
+  messages        Message[]
+
+  @@map("conversations")
+}
+
+// Tabela de Armazenamento de Chat (Mensagens)
+model Message {
+  id             String           @id @default(uuid())
+  conversationId String
+  senderId       String?          // ID do User se for operador, ou null se for sistema/cliente
+  
+  content        String           @db.Text
+  direction      MessageDirection // INBOUND ou OUTBOUND
+  via            MessageVia       // INBOUND, CAMPAIGN, CHAT_MANUAL
+  
+  externalId     String?          // ID da mensagem na Meta/Evolution
+  status         String?          // sent, delivered, read, failed
+  
+  createdAt      DateTime         @default(now())
+
+  conversation   Conversation     @relation(fields: [conversationId], references: [id])
+  sender         User?            @relation(fields: [senderId], references: [id])
+
+  @@map("messages")
+}
+
+// Tabela de Campanhas
+model Campaign {
+  id                String         @id @default(uuid())
+  name              String
+  serviceInstanceId String
+  templateId        String?
+  supervisorId      String         // Quem criou
+  
+  csvPath           String?        // Caminho do arquivo salvo
+  status            CampaignStatus @default(PENDING)
+  
+  scheduledAt       DateTime?
+  startedAt         DateTime?
+  finishedAt        DateTime?
+
+  // Configurações de envio
+  delaySeconds      Int            @default(120) // 1 mensagem a cada 2 minutos (120s)
+
+  serviceInstance   ServiceInstance @relation(fields: [serviceInstanceId], references: [id])
+  template          Template?       @relation(fields: [templateId], references: [id])
+  supervisor        User            @relation(fields: [supervisorId], references: [id])
+  
+  items             CampaignItem[]
+
+  @@map("campaigns")
+}
+
+// Itens da Campanha (Cada contato a receber)
+model CampaignItem {
+  id           String    @id @default(uuid())
+  campaignId   String
+  contactId    String
+  
+  status       String    @default("PENDING") // PENDING, SENT, FAILED
+  errorMessage String?
+  sentAt       DateTime?
+
+  campaign     Campaign  @relation(fields: [campaignId], references: [id])
+  contact      Contact   @relation(fields: [contactId], references: [id])
+
+  @@map("campaign_items")
+}
+
+// Tabela de Tabulações
+model Tabulation {
+  id         String  @id @default(uuid())
+  name       String  @unique // Ex: "Acordo Gerado", "Sem Interesse"
+  isAutomatic Boolean @default(false) // True para tabulações automáticas (ex: expiração)
+  
+  finishedConversations FinishedConversation[]
+
+  @@map("tabulations")
+}
+
+// Tabela de Conversas Finalizadas (Relatório Histórico)
+model FinishedConversation {
+  id               String   @id @default(uuid())
+  originalChatId   String   // Referência ao ID da conversa original
+  
+  // Dados "congelados" para relatório
+  contactName      String
+  contactPhone     String
+  operatorName     String
+  operatorPhone    String?  // Telefone usado pelo operador (Instância)
+  
+  startTime        DateTime
+  endTime          DateTime @default(now())
+  durationSeconds  Int
+  
+  avgResponseTimeUser     Int? // Em segundos
+  avgResponseTimeOperator Int? // Em segundos
+  
+  tabulationId     String
+  operatorId       String
+  contactId        String
+
+  tabulation       Tabulation @relation(fields: [tabulationId], references: [id])
+  operator         User       @relation(fields: [operatorId], references: [id])
+  contact          Contact    @relation(fields: [contactId], references: [id])
+
+  @@map("finished_conversations")
+}
+
