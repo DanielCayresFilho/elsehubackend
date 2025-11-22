@@ -17,21 +17,34 @@ export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(payload: CreateUserDto): Promise<UserResponseDto> {
+    console.log('[UsersService] Creating user:', {
+      name: payload.name,
+      email: payload.email,
+      role: payload.role,
+      isActive: payload.isActive,
+    });
+
     await this.ensureEmailAvailable(payload.email);
 
     const hashedPassword = await bcrypt.hash(payload.password, 12);
 
-    const user = await this.prisma.user.create({
-      data: {
-        name: payload.name,
-        email: payload.email,
-        password: hashedPassword,
-        role: payload.role,
-        isActive: payload.isActive ?? true,
-      },
-    });
+    try {
+      const user = await this.prisma.user.create({
+        data: {
+          name: payload.name,
+          email: payload.email,
+          password: hashedPassword,
+          role: payload.role,
+          isActive: payload.isActive ?? true,
+        },
+      });
 
-    return this.toResponse(user);
+      console.log('[UsersService] User created successfully:', user.id);
+      return this.toResponse(user);
+    } catch (error) {
+      console.error('[UsersService] Error creating user:', error);
+      throw error;
+    }
   }
 
   async findAll(query: PaginationQueryDto) {

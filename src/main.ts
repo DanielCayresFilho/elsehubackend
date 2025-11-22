@@ -37,6 +37,19 @@ async function bootstrap() {
       transformOptions: {
         enableImplicitConversion: true,
       },
+      exceptionFactory: (errors) => {
+        const messages = errors.map((error) => {
+          const constraints = error.constraints
+            ? Object.values(error.constraints)
+            : [];
+          return {
+            property: error.property,
+            constraints,
+            value: error.value,
+          };
+        });
+        return new ValidationPipe().createExceptionFactory()(errors);
+      },
     }),
   );
 

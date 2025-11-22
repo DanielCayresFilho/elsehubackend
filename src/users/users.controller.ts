@@ -25,6 +25,14 @@ export class UsersController {
   @Roles(Role.ADMIN)
   @Post()
   create(@Body() payload: CreateUserDto) {
+    console.log('[UsersController] Creating user with payload:', {
+      name: payload.name,
+      email: payload.email,
+      role: payload.role,
+      isActive: payload.isActive,
+      hasPassword: !!payload.password,
+      passwordLength: payload.password?.length,
+    });
     return this.usersService.create(payload);
   }
 
