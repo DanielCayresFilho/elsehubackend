@@ -47,6 +47,10 @@ COPY --from=builder /usr/src/app/node_modules/@prisma ./node_modules/@prisma
 COPY --from=builder /usr/src/app/dist ./dist
 COPY --from=builder /usr/src/app/prisma/seed.js ./prisma/seed.js
 
+# Copy scripts
+COPY scripts ./scripts
+RUN chmod +x scripts/reset-db.sh
+
 # Verify build output
 RUN ls -la dist/src/ && test -f dist/src/main.js
 
