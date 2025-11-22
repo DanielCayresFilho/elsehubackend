@@ -30,6 +30,12 @@ export class CampaignsController {
     @CurrentUser() user: AuthenticatedUser,
     @Body() createDto: CreateCampaignDto,
   ) {
+    console.log('[CampaignsController] Creating campaign:', {
+      name: createDto.name,
+      serviceInstanceId: createDto.serviceInstanceId,
+      templateId: createDto.templateId,
+      userId: user.id,
+    });
     return this.campaignsService.create(user.id, createDto);
   }
 

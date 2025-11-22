@@ -25,6 +25,11 @@ export class ServiceInstancesController {
   @Post()
   @Roles(Role.ADMIN)
   create(@Body() createDto: CreateServiceInstanceDto) {
+    console.log('[ServiceInstancesController] Creating instance:', {
+      name: createDto.name,
+      provider: createDto.provider,
+      hasCredentials: !!createDto.credentials,
+    });
     return this.serviceInstancesService.create(createDto);
   }
 

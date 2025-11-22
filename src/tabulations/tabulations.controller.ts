@@ -23,6 +23,9 @@ export class TabulationsController {
   @Post()
   @Roles(Role.ADMIN, Role.SUPERVISOR)
   create(@Body() createDto: CreateTabulationDto) {
+    console.log('[TabulationsController] Creating tabulation:', {
+      name: createDto.name,
+    });
     return this.tabulationsService.create(createDto);
   }
 

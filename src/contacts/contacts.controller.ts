@@ -35,6 +35,11 @@ export class ContactsController {
   @Roles(Role.ADMIN, Role.SUPERVISOR, Role.OPERATOR)
   @Post()
   create(@Body() payload: CreateContactDto) {
+    console.log('[ContactsController] Creating contact:', {
+      name: payload.name,
+      phone: payload.phone,
+      cpf: payload.cpf,
+    });
     return this.contactsService.create(payload);
   }
 

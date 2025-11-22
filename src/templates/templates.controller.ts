@@ -24,6 +24,11 @@ export class TemplatesController {
   @Post()
   @Roles(Role.ADMIN, Role.SUPERVISOR)
   create(@Body() createDto: CreateTemplateDto) {
+    console.log('[TemplatesController] Creating template:', {
+      name: createDto.name,
+      serviceInstanceId: createDto.serviceInstanceId,
+      hasBody: !!createDto.body,
+    });
     return this.templatesService.create(createDto);
   }
 

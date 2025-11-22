@@ -27,19 +27,28 @@ export class ContactsService {
   ) {}
 
   async create(payload: CreateContactDto): Promise<ContactResponseDto> {
+    console.log('[ContactsService] Creating contact:', {
+      name: payload.name,
+      phone: payload.phone,
+      cpf: payload.cpf,
+      additional1: payload.additional1,
+      additional2: payload.additional2,
+    });
     try {
       const contact = await this.prisma.contact.create({
         data: {
           name: payload.name.trim(),
           phone: this.normalizePhone(payload.phone),
-          cpf: payload.cpf?.trim(),
-          additional1: payload.additional1?.trim(),
-          additional2: payload.additional2?.trim(),
+          cpf: payload.cpf?.trim() || undefined,
+          additional1: payload.additional1?.trim() || undefined,
+          additional2: payload.additional2?.trim() || undefined,
         },
       });
 
+      console.log('[ContactsService] Contact created:', contact.id);
       return this.toResponse(contact);
     } catch (error) {
+      console.error('[ContactsService] Error creating contact:', error);
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === 'P2002'
