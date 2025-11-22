@@ -114,6 +114,16 @@ export class UsersService {
     return this.toResponse(updated);
   }
 
+  async remove(id: string): Promise<void> {
+    const user = await this.prisma.user.findUnique({ where: { id } });
+
+    if (!user) {
+      throw new NotFoundException('Usuário não encontrado');
+    }
+
+    await this.prisma.user.delete({ where: { id } });
+  }
+
   async toggleOnlineStatus(userId: string, isOnline: boolean): Promise<UserResponseDto> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },

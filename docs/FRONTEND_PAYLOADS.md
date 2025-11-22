@@ -27,6 +27,10 @@ Este documento descreve os endpoints e payloads esperados pelo backend, atualiza
 ```
 *Nota: `isActive` é o campo correto para ativar/desativar.*
 
+### Deletar Usuário (`DELETE /users/:id`)
+Remove um usuário permanentemente. Requer permissão de `ADMIN`.
+**Resposta:** Status 200 OK.
+
 ---
 
 ## 2. Instâncias de Serviço (`/service-instances`)
@@ -156,4 +160,3 @@ Os status retornados pelo backend são:
 
 3. **Campos Opcionais**:
    - Certifique-se de não enviar `null` para campos opcionais. Envie `undefined` (remova a chave do JSON) ou uma string vazia se o backend aceitar.
-
