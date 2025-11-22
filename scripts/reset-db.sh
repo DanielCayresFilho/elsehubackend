@@ -1,11 +1,11 @@
-#!/bin/bash
+#!/bin/sh
 set -e
 
 echo "🗑️  Resetando banco de dados..."
 echo ""
 
-# Usar o Prisma local
-node node_modules/.bin/prisma migrate reset --force --skip-seed
+# Usar npx prisma (funciona no Alpine)
+npx prisma@6.19.0 migrate reset --force --skip-seed
 
 echo ""
 echo "✅ Banco resetado com sucesso!"
