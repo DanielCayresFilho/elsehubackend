@@ -2,8 +2,10 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  Logger,
 } from '@nestjs/common';
 import { ServiceInstance } from '@prisma/client';
+import axios from 'axios';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateServiceInstanceDto } from './dto/create-service-instance.dto';
@@ -12,7 +14,56 @@ import { ServiceInstanceResponseDto } from './dto/service-instance-response.dto'
 
 @Injectable()
 export class ServiceInstancesService {
+  private readonly logger = new Logger(ServiceInstancesService.name);
+
   constructor(private readonly prisma: PrismaService) {}
+
+  async getQrCode(id: string): Promise<{ base64?: string; pairingCode?: string; message?: string }> {
+    const instance = await this.prisma.serviceInstance.findUnique({
+      where: { id },
+    });
+
+    if (!instance) {
+      throw new NotFoundException('Instância não encontrada');
+    }
+
+    if (instance.provider !== 'EVOLUTION_API') {
+      throw new BadRequestException('QR Code disponível apenas para Evolution API');
+    }
+
+    const credentials = instance.credentials as Record<string, any>;
+    const { serverUrl, apiToken, instanceName } = credentials;
+
+    if (!serverUrl || !apiToken || !instanceName) {
+      throw new BadRequestException('Credenciais inválidas para conectar');
+    }
+
+    try {
+      // Primeiro, tenta conectar a instância
+      const connectUrl = `${serverUrl}/instance/connect/${instanceName}`;
+      this.logger.log(`Fetching QR Code from: ${connectUrl}`);
+
+      const response = await axios.get(connectUrl, {
+        headers: {
+          apikey: apiToken,
+        },
+      });
+
+      // A Evolution retorna: { instance: { ... }, base64: "..." } ou { code: "..." }
+      if (response.data?.base64) {
+        return { base64: response.data.base64 };
+      } else if (response.data?.code) {
+        return { pairingCode: response.data.code };
+      } else if (response.data?.instance?.state === 'open') {
+         return { message: 'Instância já conectada' };
+      }
+
+      return response.data;
+    } catch (error) {
+      this.logger.error('Erro ao buscar QR Code na Evolution API', error);
+      throw new BadRequestException('Falha ao comunicar com a Evolution API: ' + (error.response?.data?.message || error.message));
+    }
+  }
 
   async create(
     payload: CreateServiceInstanceDto,

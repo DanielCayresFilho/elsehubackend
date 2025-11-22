@@ -45,6 +45,12 @@ export class ServiceInstancesController {
     return this.serviceInstancesService.findOne(id);
   }
 
+  @Get(':id/qrcode')
+  @Roles(Role.ADMIN, Role.SUPERVISOR)
+  async getQrCode(@Param('id') id: string) {
+    return this.serviceInstancesService.getQrCode(id);
+  }
+
   @Patch(':id')
   @Roles(Role.ADMIN)
   update(@Param('id') id: string, @Body() updateDto: UpdateServiceInstanceDto) {
