@@ -33,6 +33,9 @@ ENV NODE_ENV=production
 COPY package*.json ./
 RUN npm install --omit=dev --legacy-peer-deps
 
+# Install Prisma CLI globally for migrations
+RUN npm install -g prisma@6.19.0
+
 # Copy prisma schema
 COPY prisma ./prisma
 

@@ -4,8 +4,8 @@ set -e
 echo "🗑️  Resetando banco de dados..."
 echo ""
 
-# Usar npx prisma (funciona no Alpine)
-npx prisma@6.19.0 migrate reset --force --skip-seed
+# Prisma CLI está instalado globalmente no container
+prisma migrate reset --force --skip-seed
 
 echo ""
 echo "✅ Banco resetado com sucesso!"

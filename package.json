@@ -20,7 +20,7 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "db:seed": "ts-node ./prisma/seed.ts",
     "db:migrate": "prisma migrate dev",
-    "db:deploy": "npx prisma@6.19.0 migrate deploy",
+    "db:deploy": "prisma migrate deploy",
     "db:push": "prisma db push",
     "db:generate": "prisma generate",
     "db:reset": "sh scripts/reset-db.sh",
