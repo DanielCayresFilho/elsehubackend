@@ -20,11 +20,11 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "db:seed": "ts-node ./prisma/seed.ts",
     "db:migrate": "prisma migrate dev",
-    "db:deploy": "prisma migrate deploy",
+    "db:deploy": "node node_modules/.bin/prisma migrate deploy",
     "db:push": "prisma db push",
-    "seed": "node prisma/seed.js",
-    "db:deploy": "prisma migrate deploy",
-    "db:generate": "prisma generate"
+    "db:generate": "prisma generate",
+    "db:reset": "bash scripts/reset-db.sh",
+    "seed": "node prisma/seed.js"
   },
   "dependencies": {
     "@nestjs/bullmq": "^11.0.4",
