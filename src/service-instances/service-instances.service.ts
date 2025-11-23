@@ -176,14 +176,17 @@ export class ServiceInstancesService {
       const response = await axios.post(
         webhookUrlEndpoint,
         {
-          url: webhookUrl,
-          webhook_by_events: true,
-          webhook_base64: false,
-          events: [
-            'MESSAGES_UPSERT',    // Mensagens recebidas/enviadas
-            'MESSAGES_UPDATE',     // Atualização de status (sent, delivered, read)
-            'CONNECTION_UPDATE',   // Atualização de conexão
-          ],
+          webhook: {
+            url: webhookUrl,
+            enabled: true,
+            webhook_by_events: true,
+            webhook_base64: false,
+            events: [
+              'MESSAGES_UPSERT',    // Mensagens recebidas/enviadas
+              'MESSAGES_UPDATE',     // Atualização de status (sent, delivered, read)
+              'CONNECTION_UPDATE',   // Atualização de conexão
+            ],
+          },
         },
         {
           headers: {
