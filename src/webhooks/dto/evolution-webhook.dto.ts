@@ -9,6 +9,27 @@ export class EvolutionWebhookDto {
 
   @IsObject()
   data: EvolutionWebhookData;
+
+  // Campos extras que a Evolution API envia (opcionais)
+  @IsOptional()
+  @IsString()
+  destination?: string;
+
+  @IsOptional()
+  @IsString()
+  date_time?: string;
+
+  @IsOptional()
+  @IsString()
+  sender?: string;
+
+  @IsOptional()
+  @IsString()
+  server_url?: string;
+
+  @IsOptional()
+  @IsString()
+  apikey?: string;
 }
 
 export interface EvolutionWebhookData {
