@@ -97,13 +97,17 @@ export class ServiceInstancesService {
 
     try {
       // Endpoint da Evolution API para criar instância
-      // A Evolution API aceita POST /instance/create/{instanceName} com body vazio ou com configurações
-      const createUrl = `${serverUrl.replace(/\/$/, '')}/instance/create/${instanceName}`;
+      // A Evolution API v2 usa POST /instance/create com instanceName no body
+      const createUrl = `${serverUrl.replace(/\/$/, '')}/instance/create`;
       this.logger.log(`Criando instância na Evolution API: ${createUrl}`);
 
       const response = await axios.post(
         createUrl,
-        {}, // Body vazio - a Evolution cria com configurações padrão
+        {
+          instanceName: instanceName,
+          integration: 'WHATSAPP-BAILEYS',
+          qrcode: true,
+        },
         {
           headers: {
             apikey: apiToken,
