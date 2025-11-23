@@ -36,7 +36,10 @@ export class WebhooksService {
   }
 
   async handleEvolutionWebhook(payload: EvolutionWebhookDto): Promise<void> {
-    this.logger.log(`Webhook Evolution recebido: ${payload.event}`);
+    this.logger.log(`Webhook Evolution recebido: ${payload.event}`, {
+      instance: payload.instance,
+      hasData: !!payload.data,
+    });
 
     switch (payload.event) {
       case 'messages.upsert':
@@ -163,8 +166,16 @@ export class WebhooksService {
   private async processEvolutionMessage(payload: EvolutionWebhookDto): Promise<void> {
     const { instance, data } = payload;
 
+    this.logger.log(`Processando mensagem Evolution`, {
+      instance,
+      fromMe: data.key?.fromMe,
+      remoteJid: data.key?.remoteJid,
+      hasMessage: !!data.message,
+    });
+
     if (data.key?.fromMe) {
       // Mensagem enviada pelo sistema, ignorar
+      this.logger.debug('Mensagem ignorada: fromMe = true');
       return;
     }
 
@@ -249,9 +260,14 @@ export class WebhooksService {
     });
 
     // Notificar via WebSocket
+    this.logger.log(`Emitindo mensagem via WebSocket`, {
+      conversationId: conversation.id,
+      messageId: newMessage.id,
+      content: messageText.substring(0, 50),
+    });
     this.chatGateway.emitNewMessage(conversation.id, newMessage);
 
-    this.logger.log(`Mensagem Evolution processada: ${data.key?.id}`);
+    this.logger.log(`Mensagem Evolution processada com sucesso: ${data.key?.id}`);
   }
 
   private async processEvolutionMessageUpdate(
