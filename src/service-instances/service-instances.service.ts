@@ -70,6 +70,11 @@ export class ServiceInstancesService {
   ): Promise<ServiceInstanceResponseDto> {
     this.validateCredentials(payload.provider, payload.credentials);
 
+    // Se for Evolution API, criar a instância na Evolution primeiro
+    if (payload.provider === 'EVOLUTION_API') {
+      await this.createEvolutionInstance(payload.credentials);
+    }
+
     const instance = await this.prisma.serviceInstance.create({
       data: {
         name: payload.name.trim(),
@@ -79,6 +84,69 @@ export class ServiceInstancesService {
     });
 
     return this.toResponse(instance);
+  }
+
+  private async createEvolutionInstance(credentials: Record<string, any>): Promise<void> {
+    const { serverUrl, apiToken, instanceName } = credentials;
+
+    if (!serverUrl || !apiToken || !instanceName) {
+      throw new BadRequestException(
+        'Credenciais da Evolution API incompletas. Necessário: instanceName, apiToken, serverUrl',
+      );
+    }
+
+    try {
+      // Endpoint da Evolution API para criar instância
+      // A Evolution API aceita POST /instance/create/{instanceName} com body vazio ou com configurações
+      const createUrl = `${serverUrl.replace(/\/$/, '')}/instance/create/${instanceName}`;
+      this.logger.log(`Criando instância na Evolution API: ${createUrl}`);
+
+      const response = await axios.post(
+        createUrl,
+        {}, // Body vazio - a Evolution cria com configurações padrão
+        {
+          headers: {
+            apikey: apiToken,
+            'Content-Type': 'application/json',
+          },
+        },
+      );
+
+      this.logger.log(`Instância criada na Evolution API: ${instanceName}`, {
+        status: response.status,
+        data: response.data,
+      });
+    } catch (error: any) {
+      this.logger.error('Erro ao criar instância na Evolution API', {
+        error: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+        url: error.config?.url,
+      });
+
+      // Se a instância já existe, não é um erro crítico (pode continuar)
+      const errorMessage = error.response?.data?.message || error.response?.data?.error || '';
+      if (
+        error.response?.status === 400 &&
+        (errorMessage.toLowerCase().includes('already exists') ||
+          errorMessage.toLowerCase().includes('já existe') ||
+          errorMessage.toLowerCase().includes('duplicate'))
+      ) {
+        this.logger.warn(`Instância ${instanceName} já existe na Evolution API, continuando...`);
+        return;
+      }
+
+      // Se for erro 401, credenciais inválidas
+      if (error.response?.status === 401) {
+        throw new BadRequestException(
+          'Credenciais inválidas da Evolution API. Verifique o apiToken e a URL do servidor.',
+        );
+      }
+
+      throw new BadRequestException(
+        `Falha ao criar instância na Evolution API: ${errorMessage || error.message}`,
+      );
+    }
   }
 
   async findAll() {

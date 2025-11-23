@@ -152,7 +152,19 @@ export class ContactsService {
       throw new NotFoundException('Contato não encontrado');
     }
 
-    await this.prisma.contact.delete({ where: { id } });
+    try {
+      await this.prisma.contact.delete({ where: { id } });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2003'
+      ) {
+        throw new BadRequestException(
+          'Não é possível remover este contato pois ele possui conversas ou registros associados',
+        );
+      }
+      throw error;
+    }
   }
 
   async importFromCsv(

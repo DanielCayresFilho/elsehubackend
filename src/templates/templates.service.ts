@@ -126,6 +126,12 @@ export class TemplatesService {
       throw new NotFoundException('Template não encontrado');
     }
 
+    if (template.campaigns.length > 0) {
+      throw new BadRequestException(
+        'Não é possível remover um template que está sendo usado em campanhas',
+      );
+    }
+
     await this.prisma.template.delete({ where: { id } });
   }
 

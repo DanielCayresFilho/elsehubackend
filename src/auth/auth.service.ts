@@ -21,12 +21,20 @@ export class AuthService {
   ) {}
 
   async login(payload: LoginDto): Promise<AuthResponseDto> {
+    console.log(`[AuthService] Tentativa de login para: ${payload.email}`);
+    
     const user = await this.prisma.user.findUnique({
       where: { email: payload.email },
     });
 
-    if (!user || !user.isActive) {
+    if (!user) {
+      console.warn(`[AuthService] Usuário não encontrado: ${payload.email}`);
       throw new UnauthorizedException('Credenciais inválidas');
+    }
+
+    if (!user.isActive) {
+      console.warn(`[AuthService] Usuário inativo: ${payload.email}`);
+      throw new UnauthorizedException('Credenciais inválidas'); // Mensagem genérica por segurança, mas log específico
     }
 
     const isPasswordValid = await bcrypt.compare(
@@ -35,8 +43,11 @@ export class AuthService {
     );
 
     if (!isPasswordValid) {
+      console.warn(`[AuthService] Senha incorreta para: ${payload.email}`);
       throw new UnauthorizedException('Credenciais inválidas');
     }
+
+    console.log(`[AuthService] Login bem-sucedido para: ${payload.email}`);
 
     const tokens = await this.generateTokens(user);
 
