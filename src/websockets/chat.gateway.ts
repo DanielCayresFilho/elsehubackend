@@ -66,7 +66,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       // Notificar outros que o usuário está online
       this.server.emit('user:online', { userId, email: payload.email });
     } catch (error) {
-      this.logger.error(`Erro ao conectar cliente: ${error.message}`);
+      this.logger.error(`Erro ao conectar cliente: ${error.message}`, error.stack);
+      this.logger.error(`Token recebido: ${this.extractToken(client) ? 'SIM' : 'NÃO'}`);
       client.disconnect();
     }
   }
@@ -200,13 +201,18 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   private extractToken(client: Socket): string | null {
+    // 1. Tentar via auth object (Socket.IO padrão)
+    if (client.handshake.auth?.token) {
+      return client.handshake.auth.token;
+    }
+
+    // 2. Tentar via header Authorization
     const authHeader = client.handshake.headers.authorization;
-    
     if (authHeader && authHeader.startsWith('Bearer ')) {
       return authHeader.substring(7);
     }
 
-    // Também aceitar token via query parameter
+    // 3. Tentar via query parameter
     const token = client.handshake.query.token;
     if (typeof token === 'string') {
       return token;
