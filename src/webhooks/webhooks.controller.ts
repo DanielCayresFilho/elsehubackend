@@ -59,13 +59,19 @@ export class WebhooksController {
   @Post('evolution')
   @HttpCode(HttpStatus.OK)
   async handleEvolutionWebhook(@Body() payload: EvolutionWebhookDto) {
-    this.logger.log('Webhook Evolution recebido');
+    this.logger.log('Webhook Evolution recebido', {
+      event: payload.event,
+      instance: payload.instance,
+      hasData: !!payload.data,
+      remoteJid: payload.data?.key?.remoteJid,
+      fromMe: payload.data?.key?.fromMe,
+    });
     
     try {
       await this.webhooksService.handleEvolutionWebhook(payload);
       return { success: true };
     } catch (error) {
-      this.logger.error(`Erro ao processar webhook Evolution: ${error.message}`);
+      this.logger.error(`Erro ao processar webhook Evolution: ${error.message}`, error.stack);
       return { success: false, error: error.message };
     }
   }

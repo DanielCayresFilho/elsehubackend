@@ -171,6 +171,8 @@ export class WebhooksService {
       fromMe: data.key?.fromMe,
       remoteJid: data.key?.remoteJid,
       hasMessage: !!data.message,
+      messageType: data.messageType,
+      messageKeys: data.message ? Object.keys(data.message) : [],
     });
 
     if (data.key?.fromMe) {
@@ -189,13 +191,47 @@ export class WebhooksService {
       return;
     }
 
+    // Verificar se é mensagem de grupo (termina com @g.us)
+    if (data.key?.remoteJid?.endsWith('@g.us')) {
+      this.logger.debug('Mensagem Evolution de grupo ignorada (não suportado)');
+      return;
+    }
+
     const contactPhone = this.normalizePhone(
       data.key?.remoteJid?.replace('@s.whatsapp.net', '') || '',
     );
+    
+    this.logger.log(`Telefone normalizado: ${contactPhone}`, {
+      original: data.key?.remoteJid,
+    });
+    
     const messageText = this.extractEvolutionMessageText(data);
 
+    this.logger.log(`Texto extraído da mensagem: ${messageText ? `"${messageText.substring(0, 50)}"` : 'NENHUM'}`, {
+      hasMessage: !!data.message,
+      messageKeys: data.message ? Object.keys(data.message) : [],
+    });
+
     if (!messageText) {
-      this.logger.warn('Mensagem Evolution sem texto, pulando...');
+      // Verificar se é mídia
+      const hasMedia = !!(
+        data.message?.imageMessage ||
+        data.message?.videoMessage ||
+        data.message?.audioMessage ||
+        data.message?.documentMessage ||
+        data.message?.stickerMessage
+      );
+      
+      if (hasMedia) {
+        this.logger.warn('Mensagem Evolution de mídia ignorada (não suportado ainda)', {
+          messageKeys: data.message ? Object.keys(data.message) : [],
+        });
+      } else {
+        this.logger.warn('Mensagem Evolution sem texto e sem mídia identificada, pulando...', {
+          messageKeys: data.message ? Object.keys(data.message) : [],
+          fullData: JSON.stringify(data.message, null, 2),
+        });
+      }
       return;
     }
 
