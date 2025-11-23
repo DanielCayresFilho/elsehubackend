@@ -66,8 +66,16 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       // Notificar outros que o usuário está online
       this.server.emit('user:online', { userId, email: payload.email });
     } catch (error) {
-      this.logger.error(`Erro ao conectar cliente: ${error.message}`, error.stack);
-      this.logger.error(`Token recebido: ${this.extractToken(client) ? 'SIM' : 'NÃO'}`);
+      if (error.name === 'TokenExpiredError') {
+        this.logger.warn(`Token expirado ao conectar cliente: ${client.id}`);
+        client.emit('error', { 
+          type: 'TOKEN_EXPIRED', 
+          message: 'Token JWT expirado. Renove o token antes de conectar.' 
+        });
+      } else {
+        this.logger.error(`Erro ao conectar cliente: ${error.message}`, error.stack);
+        this.logger.error(`Token recebido: ${this.extractToken(client) ? 'SIM' : 'NÃO'}`);
+      }
       client.disconnect();
     }
   }
