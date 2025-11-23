@@ -45,9 +45,13 @@ export interface EvolutionWebhookData {
     documentMessage?: any;
     audioMessage?: any;
     videoMessage?: any;
+    stickerMessage?: any;
   };
+  messageType?: string;
   messageTimestamp?: number;
   pushName?: string;
   status?: string;
+  instanceId?: string;
+  source?: string;
 }
 
