@@ -1,5 +1,6 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { Message, MessageDirection, MessageVia, ChatStatus } from '@prisma/client';
+import axios from 'axios';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { SendMessageDto } from './dto/send-message.dto';
@@ -8,6 +9,8 @@ import { ListMessagesQueryDto } from './dto/list-messages-query.dto';
 
 @Injectable()
 export class MessagesService {
+  private readonly logger = new Logger(MessagesService.name);
+
   constructor(private readonly prisma: PrismaService) {}
 
   async send(
@@ -44,15 +47,33 @@ export class MessagesService {
       },
     });
 
-    // TODO: Integrar com provedor real (Meta/Evolution) para enviar mensagem
-    // Por enquanto, apenas simulamos o envio marcando como 'sent'
-    await this.prisma.message.update({
-      where: { id: message.id },
-      data: {
-        status: 'sent',
-        externalId: `sim_${Date.now()}`, // Simula ID externo
-      },
-    });
+    // Enviar mensagem via provedor (Evolution API ou Meta)
+    try {
+      if (conversation.serviceInstance.provider === 'EVOLUTION_API') {
+        await this.sendViaEvolutionAPI(conversation, message);
+      } else if (conversation.serviceInstance.provider === 'OFFICIAL_META') {
+        // TODO: Implementar envio via Meta API
+        this.logger.warn('Envio via Meta API ainda não implementado');
+        await this.prisma.message.update({
+          where: { id: message.id },
+          data: {
+            status: 'sent',
+            externalId: `meta_${Date.now()}`,
+          },
+        });
+      } else {
+        throw new BadRequestException('Provedor não suportado');
+      }
+    } catch (error) {
+      this.logger.error(`Erro ao enviar mensagem: ${error.message}`, error);
+      await this.prisma.message.update({
+        where: { id: message.id },
+        data: {
+          status: 'failed',
+        },
+      });
+      throw new BadRequestException(`Falha ao enviar mensagem: ${error.message}`);
+    }
 
     return this.toResponse(message);
   }
@@ -145,6 +166,64 @@ export class MessagesService {
         ...(externalId && { externalId }),
       },
     });
+  }
+
+  private async sendViaEvolutionAPI(conversation: any, message: Message): Promise<void> {
+    const credentials = conversation.serviceInstance.credentials as Record<string, any>;
+    const { serverUrl, apiToken, instanceName } = credentials;
+
+    if (!serverUrl || !apiToken || !instanceName) {
+      throw new BadRequestException('Credenciais da Evolution API incompletas');
+    }
+
+    const phone = conversation.contact.phone.replace(/[^\d+]/g, '');
+    const sendUrl = `${serverUrl.replace(/\/$/, '')}/message/sendText/${instanceName}`;
+
+    this.logger.log(`Enviando mensagem via Evolution API: ${sendUrl}`, {
+      phone,
+      instanceName,
+    });
+
+    try {
+      const response = await axios.post(
+        sendUrl,
+        {
+          number: phone,
+          text: message.content,
+        },
+        {
+          headers: {
+            apikey: apiToken,
+            'Content-Type': 'application/json',
+          },
+        },
+      );
+
+      // A Evolution API retorna o ID da mensagem em key.id
+      const externalId = response.data?.key?.id || response.data?.id || `evol_${Date.now()}`;
+      // Status pode ser PENDING, SENT, DELIVERED, READ, etc.
+      const status = response.data?.status?.toLowerCase() || 'sent';
+
+      await this.prisma.message.update({
+        where: { id: message.id },
+        data: {
+          status,
+          externalId,
+        },
+      });
+
+      this.logger.log(`Mensagem enviada com sucesso: ${externalId}`);
+    } catch (error: any) {
+      this.logger.error('Erro ao enviar mensagem na Evolution API', {
+        error: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+      });
+
+      throw new BadRequestException(
+        `Falha ao enviar mensagem na Evolution API: ${error.response?.data?.message || error.message}`,
+      );
+    }
   }
 
   private toResponse(message: Message & { sender?: { name: string } | null }): MessageResponseDto {

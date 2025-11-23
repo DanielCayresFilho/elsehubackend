@@ -196,7 +196,280 @@ Configuração da conexão com a Evolution API.
 
 ---
 
-## 5. Lógica de Chat e Distribuição Automática
+## 5. Mensagens (Messages)
+
+Sistema de envio e recebimento de mensagens via WhatsApp, integrado com Evolution API.
+
+### Integração com Evolution API
+
+O sistema envia mensagens reais via Evolution API quando o provedor da instância é `EVOLUTION_API`. O backend:
+1. Cria a mensagem no banco com status `pending`
+2. Chama a Evolution API: `POST /message/sendText/{instanceName}`
+3. Atualiza a mensagem com o `externalId` retornado e o status
+
+### Status das Mensagens
+
+- **`pending`**: Mensagem criada, aguardando envio
+- **`sent`**: Mensagem enviada com sucesso
+- **`delivered`**: Mensagem entregue ao destinatário
+- **`read`**: Mensagem lida pelo destinatário
+- **`failed`**: Falha no envio
+
+### Endpoints de Mensagens
+
+#### Enviar Mensagem
+
+**POST** `/api/messages/send`
+
+**Roles**: `ADMIN`, `SUPERVISOR`, `OPERATOR`
+
+**Descrição**: Envia uma mensagem de texto para um contato através de uma conversa. A mensagem é enviada via Evolution API (ou Meta API) e o status é atualizado automaticamente.
+
+**Request Body**:
+```json
+{
+  "conversationId": "uuid-da-conversa",
+  "content": "Olá! Como posso ajudar?",
+  "via": "CHAT_MANUAL"
+}
+```
+
+**Campos Obrigatórios**:
+- `conversationId` (string, UUID): ID da conversa
+- `content` (string): Conteúdo da mensagem
+
+**Campos Opcionais**:
+- `via` (enum): Origem da mensagem
+  - `CHAT_MANUAL`: Enviada manualmente pelo operador
+  - `CAMPAIGN`: Enviada via campanha
+  - `INBOUND`: Mensagem recebida (não usado neste endpoint)
+
+**Validações**:
+- A conversa deve existir
+- A conversa deve estar com status `OPEN` (não pode enviar para conversa fechada)
+- A instância de serviço da conversa deve estar ativa
+
+**Comportamento**:
+1. Cria a mensagem no banco com status `pending`
+2. Se a instância for `EVOLUTION_API`, chama `POST {serverUrl}/message/sendText/{instanceName}` com:
+   ```json
+   {
+     "number": "5514991484962",
+     "text": "Conteúdo da mensagem"
+   }
+   ```
+3. Usa o header `apikey: {apiToken}`
+4. Atualiza a mensagem com o `externalId` retornado (geralmente `key.id`) e o status
+5. Se houver erro, marca como `failed` e retorna erro
+
+**Response 201 Created**:
+```json
+{
+  "id": "uuid-da-mensagem",
+  "conversationId": "uuid-da-conversa",
+  "senderId": "uuid-do-operador",
+  "senderName": "João Silva",
+  "content": "Olá! Como posso ajudar?",
+  "direction": "OUTBOUND",
+  "via": "CHAT_MANUAL",
+  "externalId": "3EB001A01F2AFFDE364543",
+  "status": "sent",
+  "createdAt": "2025-11-23T19:55:30.300Z"
+}
+```
+
+**Erros Possíveis**:
+- `404 Not Found`: Conversa não encontrada
+- `400 Bad Request`: Não é possível enviar mensagem para conversa fechada
+- `400 Bad Request`: Instância de serviço inativa
+- `400 Bad Request`: Falha ao enviar mensagem na Evolution API (verifique credenciais e conexão)
+- `401 Unauthorized`: Token de autenticação inválido ou ausente
+
+**Nota**: Se a Evolution API retornar erro (ex: instância desconectada, número inválido), a mensagem será marcada como `failed` e o erro será retornado ao frontend.
+
+---
+
+#### Listar Mensagens de uma Conversa
+
+**GET** `/api/messages/conversation/:conversationId`
+
+**Roles**: `ADMIN`, `SUPERVISOR`, `OPERATOR`
+
+**Descrição**: Retorna todas as mensagens de uma conversa específica, ordenadas por data de criação (mais antigas primeiro). Inclui paginação.
+
+**Parâmetros de URL**:
+- `conversationId` (string, UUID): ID da conversa
+
+**Query Parameters**:
+- `page` (number, opcional, padrão: 1): Número da página
+- `limit` (number, opcional, padrão: 50): Itens por página
+
+**Exemplo de Request**:
+```
+GET /api/messages/conversation/uuid-da-conversa?page=1&limit=50
+```
+
+**Response 200 OK**:
+```json
+{
+  "data": [
+    {
+      "id": "uuid-1",
+      "conversationId": "uuid-da-conversa",
+      "senderId": null,
+      "senderName": null,
+      "content": "Olá, preciso de ajuda",
+      "direction": "INBOUND",
+      "via": "INBOUND",
+      "externalId": "evol_123",
+      "status": "received",
+      "createdAt": "2025-11-23T19:00:00.000Z"
+    },
+    {
+      "id": "uuid-2",
+      "conversationId": "uuid-da-conversa",
+      "senderId": "uuid-operador",
+      "senderName": "João Silva",
+      "content": "Olá! Como posso ajudar?",
+      "direction": "OUTBOUND",
+      "via": "CHAT_MANUAL",
+      "externalId": "3EB001A01F2AFFDE364543",
+      "status": "sent",
+      "createdAt": "2025-11-23T19:05:00.000Z"
+    }
+  ],
+  "meta": {
+    "total": 25,
+    "page": 1,
+    "limit": 50,
+    "totalPages": 1
+  }
+}
+```
+
+**Campos da Mensagem**:
+- `direction`: `INBOUND` (recebida) ou `OUTBOUND` (enviada)
+- `via`: `INBOUND`, `CHAT_MANUAL`, ou `CAMPAIGN`
+- `externalId`: ID da mensagem na Evolution API (se enviada via API)
+- `status`: Status atual da mensagem (sent, delivered, read, failed, etc.)
+
+**Erros Possíveis**:
+- `404 Not Found`: Conversa não encontrada
+- `401 Unauthorized`: Token de autenticação inválido ou ausente
+
+---
+
+#### Buscar Mensagem por ID
+
+**GET** `/api/messages/:id`
+
+**Roles**: `ADMIN`, `SUPERVISOR`, `OPERATOR`
+
+**Descrição**: Retorna os detalhes de uma mensagem específica.
+
+**Parâmetros de URL**:
+- `id` (string, UUID): ID da mensagem
+
+**Response 200 OK**:
+```json
+{
+  "id": "uuid-da-mensagem",
+  "conversationId": "uuid-da-conversa",
+  "senderId": "uuid-operador",
+  "senderName": "João Silva",
+  "content": "Olá! Como posso ajudar?",
+  "direction": "OUTBOUND",
+  "via": "CHAT_MANUAL",
+  "externalId": "3EB001A01F2AFFDE364543",
+  "status": "sent",
+  "createdAt": "2025-11-23T19:05:00.000Z"
+}
+```
+
+**Erros Possíveis**:
+- `404 Not Found`: Mensagem não encontrada
+- `401 Unauthorized`: Token de autenticação inválido ou ausente
+
+---
+
+### WebSocket - Envio de Mensagens
+
+O sistema também suporta envio de mensagens via WebSocket para atualização em tempo real.
+
+**Evento**: `message:send`
+
+**Payload**:
+```json
+{
+  "conversationId": "uuid-da-conversa",
+  "content": "Olá! Como posso ajudar?"
+}
+```
+
+**Resposta**:
+```json
+{
+  "success": true,
+  "message": {
+    "id": "uuid-da-mensagem",
+    "content": "Olá! Como posso ajudar?",
+    "status": "sent",
+    ...
+  }
+}
+```
+
+O servidor também emite o evento `message:new` para todos os clientes conectados à sala da conversa, permitindo atualização em tempo real.
+
+---
+
+### Exemplos de Uso
+
+#### Exemplo 1: Enviar Mensagem via API
+
+```bash
+curl -X POST https://api.elsehub.covenos.com.br/api/messages/send \
+  -H "Authorization: Bearer {token}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "conversationId": "uuid-da-conversa",
+    "content": "Olá! Como posso ajudar?"
+  }'
+```
+
+#### Exemplo 2: Listar Mensagens de uma Conversa
+
+```bash
+curl -X GET "https://api.elsehub.covenos.com.br/api/messages/conversation/uuid-da-conversa?page=1&limit=50" \
+  -H "Authorization: Bearer {token}"
+```
+
+#### Exemplo 3: Buscar Mensagem Específica
+
+```bash
+curl -X GET https://api.elsehub.covenos.com.br/api/messages/uuid-da-mensagem \
+  -H "Authorization: Bearer {token}"
+```
+
+---
+
+### Observações Importantes
+
+1. **Integração Evolution API**: O envio de mensagens é feito em tempo real via Evolution API. Se a instância estiver desconectada ou houver erro, a mensagem será marcada como `failed`.
+
+2. **Status das Mensagens**: O status inicial é `pending`. Após o envio bem-sucedido, muda para `sent`. A Evolution API pode atualizar o status para `delivered` ou `read` via webhooks.
+
+3. **Conversas Fechadas**: Não é possível enviar mensagens para conversas com status `CLOSED`. A conversa deve estar `OPEN`.
+
+4. **Telefone**: O número de telefone é normalizado automaticamente (remove caracteres especiais, adiciona `+` se necessário) antes de enviar para a Evolution API.
+
+5. **Erros de Envio**: Se houver erro na Evolution API (ex: instância desconectada, número inválido, rate limit), a mensagem será marcada como `failed` e o erro será retornado ao frontend.
+
+6. **Webhooks**: O sistema recebe atualizações de status (delivered, read) via webhooks da Evolution API. Esses status são atualizados automaticamente no banco de dados.
+
+---
+
+## 6. Lógica de Chat e Distribuição Automática
 
 O coração do sistema de atendimento.
 
@@ -253,7 +526,7 @@ O coração do sistema de atendimento.
 
 ---
 
-## 6. Contatos (Contacts)
+## 7. Contatos (Contacts)
 
 #### Criar Contato
 - **POST** `/api/contacts`
@@ -279,7 +552,7 @@ O coração do sistema de atendimento.
 
 ---
 
-## 7. Campanhas (Campaigns)
+## 8. Campanhas (Campaigns)
 
 Sistema de disparo em massa.
 
@@ -303,7 +576,7 @@ Sistema de disparo em massa.
 
 ---
 
-## 8. Templates e Tabulações
+## 9. Templates e Tabulações
 
 #### Templates (Mensagens Prontas)
 - **POST** `/api/templates`
@@ -328,7 +601,7 @@ Sistema de disparo em massa.
 
 ---
 
-## 9. Relatórios (Reports)
+## 10. Relatórios (Reports)
 
 Endpoints apenas para `ADMIN` e `SUPERVISOR`.
 
@@ -342,7 +615,7 @@ Endpoints apenas para `ADMIN` e `SUPERVISOR`.
 
 ---
 
-## 10. Guia de Erros para Frontend
+## 11. Guia de Erros para Frontend
 
 O backend retorna erros padronizados. O Frontend deve observar o campo `message`:
 
