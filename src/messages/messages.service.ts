@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger, Inject, forwardRef } from '@nestjs/common';
 import { Message, MessageDirection, MessageVia, ChatStatus } from '@prisma/client';
 import axios from 'axios';
 
@@ -6,12 +6,17 @@ import { PrismaService } from '../prisma/prisma.service';
 import { SendMessageDto } from './dto/send-message.dto';
 import { MessageResponseDto } from './dto/message-response.dto';
 import { ListMessagesQueryDto } from './dto/list-messages-query.dto';
+import { ChatGateway } from '../websockets/chat.gateway';
 
 @Injectable()
 export class MessagesService {
   private readonly logger = new Logger(MessagesService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Inject(forwardRef(() => ChatGateway))
+    private readonly chatGateway: ChatGateway,
+  ) {}
 
   async send(
     userId: string,
@@ -75,7 +80,20 @@ export class MessagesService {
       throw new BadRequestException(`Falha ao enviar mensagem: ${error.message}`);
     }
 
-    return this.toResponse(message);
+    // Buscar mensagem atualizada para retornar
+    const updatedMessage = await this.prisma.message.findUnique({
+      where: { id: message.id },
+      include: {
+        sender: true,
+      },
+    });
+
+    const response = this.toResponse(updatedMessage!);
+
+    // Emitir via WebSocket para atualizar o frontend em tempo real
+    this.chatGateway.emitNewMessage(payload.conversationId, response);
+
+    return response;
   }
 
   async receiveInbound(data: {

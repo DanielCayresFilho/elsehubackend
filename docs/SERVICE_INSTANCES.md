@@ -81,9 +81,22 @@ O sistema suporta dois tipos de provedores:
   1. Faz uma chamada POST para `{serverUrl}/instance/create` na Evolution API
   2. Envia o body: `{ "instanceName": "...", "integration": "WHATSAPP-BAILEYS", "qrcode": true }`
   3. Usa o header `apikey: {apiToken}`
-  4. Se a instância já existir na Evolution, o sistema continua normalmente (não é erro)
-  5. Se houver erro de autenticação (401), retorna erro
-  6. Se houver outro erro, retorna erro com detalhes
+  4. **Configura o webhook automaticamente** para receber mensagens:
+     - URL: `{APP_URL}/api/webhooks/evolution`
+     - Eventos: `MESSAGES_UPSERT`, `MESSAGES_UPDATE`, `CONNECTION_UPDATE`
+  5. Se a instância já existir na Evolution, o sistema continua normalmente (não é erro)
+  6. Se houver erro de autenticação (401), retorna erro
+  7. Se houver outro erro, retorna erro com detalhes
+
+**⚠️ IMPORTANTE - Variável de Ambiente para Webhook**:
+Para que o webhook seja configurado automaticamente, você precisa definir uma dessas variáveis de ambiente:
+```bash
+APP_URL=https://api.elsehub.com
+# OU
+WEBHOOK_URL=https://api.elsehub.com/api/webhooks/evolution
+```
+
+Se não configurar, o webhook não será configurado automaticamente e você precisará configurar manualmente na Evolution API.
 
 **Erros Possíveis**:
 - `400 Bad Request`: Credenciais incompletas ou inválidas
@@ -502,6 +515,60 @@ Você pode atualizar esse campo usando o endpoint PATCH.
 
 ---
 
+## Configuração Automática de Webhook
+
+### Evolution API
+
+Quando você cria uma instância Evolution API, o sistema **automaticamente configura o webhook** para receber mensagens em tempo real.
+
+**O que é configurado**:
+- **URL do Webhook**: `{APP_URL}/api/webhooks/evolution`
+- **Eventos**:
+  - `MESSAGES_UPSERT`: Mensagens recebidas/enviadas
+  - `MESSAGES_UPDATE`: Atualização de status (sent, delivered, read)
+  - `CONNECTION_UPDATE`: Atualização de conexão da instância
+
+**Variável de Ambiente Necessária**:
+```bash
+# Defina uma dessas variáveis no seu .env ou ambiente de produção:
+APP_URL=https://api.elsehub.com
+# OU
+WEBHOOK_URL=https://api.elsehub.com/api/webhooks/evolution
+```
+
+**Se não configurar a variável**:
+- O webhook não será configurado automaticamente
+- Você precisará configurar manualmente na Evolution API
+- As mensagens recebidas não aparecerão automaticamente no sistema
+
+**Como verificar se está configurado**:
+1. Verifique os logs do backend ao criar a instância
+2. Deve aparecer: `Webhook configurado com sucesso para instância: {nome}`
+3. Se aparecer aviso, o webhook não foi configurado
+
+**Configuração Manual (se necessário)**:
+Se o webhook não foi configurado automaticamente, você pode configurar manualmente:
+
+1. **Via Manager da Evolution API**:
+   - Acesse o Manager da sua Evolution API
+   - Vá em "Webhooks" ou "Configurações"
+   - Configure a URL: `https://api.elsehub.com/api/webhooks/evolution`
+   - Selecione os eventos: `MESSAGES_UPSERT`, `MESSAGES_UPDATE`, `CONNECTION_UPDATE`
+
+2. **Via API da Evolution**:
+   ```bash
+   curl -X POST https://evolution.covenos.com.br/webhook/set/{instanceName} \
+     -H "apikey: {apiToken}" \
+     -H "Content-Type: application/json" \
+     -d '{
+       "url": "https://api.elsehub.com/api/webhooks/evolution",
+       "webhook_by_events": true,
+       "events": ["MESSAGES_UPSERT", "MESSAGES_UPDATE", "CONNECTION_UPDATE"]
+     }'
+   ```
+
+---
+
 ## Observações Importantes
 
 1. **Segurança**: As credenciais são armazenadas no banco de dados como JSON. Certifique-se de que o banco está seguro.
@@ -512,9 +579,11 @@ Você pode atualizar esse campo usando o endpoint PATCH.
 
 4. **QR Code**: O QR Code expira após alguns minutos. Se o usuário não escanear a tempo, você precisa chamar o endpoint `/qrcode` novamente para obter um novo QR Code.
 
-5. **Deleção**: Deletar uma instância no Elsehu não remove ela da Evolution API. Se você quiser remover também da Evolution, faça isso manualmente.
+5. **Webhook**: O webhook é configurado automaticamente ao criar a instância (se `APP_URL` ou `WEBHOOK_URL` estiver configurado). Sem webhook, mensagens recebidas não aparecerão no sistema.
 
-6. **Atualização**: Atualizar credenciais no Elsehu não atualiza na Evolution API. Se você mudar o `instanceName`, você precisa gerenciar isso na Evolution separadamente.
+6. **Deleção**: Deletar uma instância no Elsehu não remove ela da Evolution API. Se você quiser remover também da Evolution, faça isso manualmente.
+
+7. **Atualização**: Atualizar credenciais no Elsehu não atualiza na Evolution API. Se você mudar o `instanceName`, você precisa gerenciar isso na Evolution separadamente.
 
 ---
 

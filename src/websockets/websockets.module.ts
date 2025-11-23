@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { ChatGateway } from './chat.gateway';
 import { MessagesModule } from '../messages/messages.module';
@@ -7,7 +7,7 @@ import { ConversationsModule } from '../conversations/conversations.module';
 @Module({
   imports: [
     JwtModule.register({}),
-    MessagesModule,
+    forwardRef(() => MessagesModule),
     ConversationsModule,
   ],
   providers: [ChatGateway],

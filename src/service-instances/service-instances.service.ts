@@ -73,6 +73,8 @@ export class ServiceInstancesService {
     // Se for Evolution API, criar a instância na Evolution primeiro
     if (payload.provider === 'EVOLUTION_API') {
       await this.createEvolutionInstance(payload.credentials);
+      // Configurar webhook automaticamente após criar a instância
+      await this.configureEvolutionWebhook(payload.credentials);
     }
 
     const instance = await this.prisma.serviceInstance.create({
@@ -150,6 +152,59 @@ export class ServiceInstancesService {
       throw new BadRequestException(
         `Falha ao criar instância na Evolution API: ${errorMessage || error.message}`,
       );
+    }
+  }
+
+  private async configureEvolutionWebhook(credentials: Record<string, any>): Promise<void> {
+    const { serverUrl, apiToken, instanceName } = credentials;
+
+    // URL do webhook (deve ser configurável via variável de ambiente)
+    const webhookUrl = process.env.WEBHOOK_URL || process.env.APP_URL 
+      ? `${process.env.APP_URL}/api/webhooks/evolution`
+      : null;
+
+    if (!webhookUrl) {
+      this.logger.warn('WEBHOOK_URL ou APP_URL não configurado. Webhook não será configurado automaticamente.');
+      this.logger.warn('Configure manualmente na Evolution API ou defina a variável WEBHOOK_URL/APP_URL');
+      return;
+    }
+
+    try {
+      const webhookUrlEndpoint = `${serverUrl.replace(/\/$/, '')}/webhook/set/${instanceName}`;
+      this.logger.log(`Configurando webhook da Evolution API: ${webhookUrlEndpoint}`);
+
+      const response = await axios.post(
+        webhookUrlEndpoint,
+        {
+          url: webhookUrl,
+          webhook_by_events: true,
+          webhook_base64: false,
+          events: [
+            'MESSAGES_UPSERT',    // Mensagens recebidas/enviadas
+            'MESSAGES_UPDATE',     // Atualização de status (sent, delivered, read)
+            'CONNECTION_UPDATE',   // Atualização de conexão
+          ],
+        },
+        {
+          headers: {
+            apikey: apiToken,
+            'Content-Type': 'application/json',
+          },
+        },
+      );
+
+      this.logger.log(`Webhook configurado com sucesso para instância: ${instanceName}`, {
+        url: webhookUrl,
+        status: response.status,
+      });
+    } catch (error: any) {
+      this.logger.error('Erro ao configurar webhook na Evolution API', {
+        error: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+      });
+      // Não lançar erro, apenas logar - o webhook pode ser configurado manualmente depois
+      this.logger.warn('Webhook não configurado automaticamente. Configure manualmente na Evolution API.');
     }
   }
 
