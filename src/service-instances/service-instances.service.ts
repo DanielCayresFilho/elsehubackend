@@ -159,9 +159,13 @@ export class ServiceInstancesService {
     const { serverUrl, apiToken, instanceName } = credentials;
 
     // URL do webhook (deve ser configurável via variável de ambiente)
-    const webhookUrl = process.env.WEBHOOK_URL || process.env.APP_URL 
-      ? `${process.env.APP_URL}/api/webhooks/evolution`
-      : null;
+    // Se WEBHOOK_URL estiver definido, usa diretamente
+    // Caso contrário, constrói a URL usando APP_URL
+    const webhookUrl = process.env.WEBHOOK_URL 
+      ? process.env.WEBHOOK_URL
+      : process.env.APP_URL 
+        ? `${process.env.APP_URL}/api/webhooks/evolution`
+        : null;
 
     if (!webhookUrl) {
       this.logger.warn('WEBHOOK_URL ou APP_URL não configurado. Webhook não será configurado automaticamente.');
@@ -171,23 +175,28 @@ export class ServiceInstancesService {
 
     try {
       const webhookUrlEndpoint = `${serverUrl.replace(/\/$/, '')}/webhook/set/${instanceName}`;
-      this.logger.log(`Configurando webhook da Evolution API: ${webhookUrlEndpoint}`);
+      this.logger.log(`Configurando webhook da Evolution API: ${webhookUrlEndpoint}`, {
+        webhookUrl,
+        instanceName,
+      });
+
+      const payload = {
+        url: webhookUrl,
+        enabled: true,
+        webhook_by_events: true,
+        webhook_base64: false,
+        events: [
+          'MESSAGES_UPSERT',    // Mensagens recebidas/enviadas
+          'MESSAGES_UPDATE',     // Atualização de status (sent, delivered, read)
+          'CONNECTION_UPDATE',   // Atualização de conexão
+        ],
+      };
+
+      this.logger.debug(`Payload do webhook: ${JSON.stringify(payload)}`);
 
       const response = await axios.post(
         webhookUrlEndpoint,
-        {
-          webhook: {
-            url: webhookUrl,
-            enabled: true,
-            webhook_by_events: true,
-            webhook_base64: false,
-            events: [
-              'MESSAGES_UPSERT',    // Mensagens recebidas/enviadas
-              'MESSAGES_UPDATE',     // Atualização de status (sent, delivered, read)
-              'CONNECTION_UPDATE',   // Atualização de conexão
-            ],
-          },
-        },
+        payload,
         {
           headers: {
             apikey: apiToken,
@@ -199,13 +208,60 @@ export class ServiceInstancesService {
       this.logger.log(`Webhook configurado com sucesso para instância: ${instanceName}`, {
         url: webhookUrl,
         status: response.status,
+        data: response.data,
       });
     } catch (error: any) {
       this.logger.error('Erro ao configurar webhook na Evolution API', {
         error: error.message,
         response: error.response?.data,
         status: error.response?.status,
+        url: error.config?.url,
+        payload: error.config?.data,
       });
+      
+      // Se o formato sem wrapper não funcionar, tenta com wrapper
+      if (error.response?.status === 400 || error.response?.status === 422) {
+        this.logger.log('Tentando formato alternativo com wrapper webhook...');
+        try {
+          const webhookUrlEndpoint = `${serverUrl.replace(/\/$/, '')}/webhook/set/${instanceName}`;
+          const alternativePayload = {
+            webhook: {
+              url: webhookUrl,
+              enabled: true,
+              webhook_by_events: true,
+              webhook_base64: false,
+              events: [
+                'MESSAGES_UPSERT',
+                'MESSAGES_UPDATE',
+                'CONNECTION_UPDATE',
+              ],
+            },
+          };
+
+          const response = await axios.post(
+            webhookUrlEndpoint,
+            alternativePayload,
+            {
+              headers: {
+                apikey: apiToken,
+                'Content-Type': 'application/json',
+              },
+            },
+          );
+
+          this.logger.log(`Webhook configurado com sucesso (formato alternativo) para instância: ${instanceName}`, {
+            url: webhookUrl,
+            status: response.status,
+          });
+          return;
+        } catch (retryError: any) {
+          this.logger.error('Erro também com formato alternativo', {
+            error: retryError.message,
+            response: retryError.response?.data,
+          });
+        }
+      }
+      
       // Não lançar erro, apenas logar - o webhook pode ser configurado manualmente depois
       this.logger.warn('Webhook não configurado automaticamente. Configure manualmente na Evolution API.');
     }
