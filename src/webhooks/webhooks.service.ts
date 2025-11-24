@@ -510,7 +510,7 @@ export class WebhooksService {
         (response.headers['content-type'] as string | undefined)?.toLowerCase() ?? '';
       const buffer = Buffer.from(response.data);
 
-      if (!this.isValidMediaContentType(mediaPayload.type, contentType)) {
+      if (!this.isValidMediaContent(mediaPayload.type, contentType, buffer)) {
         const preview = buffer.toString('utf8', 0, 200);
         this.logger.error('Conteúdo inválido ao baixar mídia da Evolution', {
           requestedType: mediaPayload.type,
@@ -542,35 +542,86 @@ export class WebhooksService {
     }
   }
 
-  private isValidMediaContentType(
+  private isValidMediaContent(
     mediaType: EvolutionSupportedMediaType,
     contentType: string,
+    buffer: Buffer,
   ): boolean {
-    if (!contentType) {
-      return false;
-    }
+    const normalizedType = contentType || '';
 
-    if (contentType.includes('text/html') || contentType.includes('application/json')) {
+    if (
+      normalizedType.includes('text/html') ||
+      normalizedType.includes('application/json')
+    ) {
       return false;
     }
 
     if (mediaType === 'IMAGE') {
-      return contentType.startsWith('image/');
+      return (
+        normalizedType.startsWith('image/') ||
+        this.looksLikeImage(buffer)
+      );
     }
 
     if (mediaType === 'AUDIO') {
-      return contentType.startsWith('audio/');
+      return (
+        normalizedType.startsWith('audio/') ||
+        this.looksLikeAudio(buffer)
+      );
     }
 
     if (mediaType === 'DOCUMENT') {
       return (
-        contentType.startsWith('application/') ||
-        contentType.startsWith('text/plain') ||
-        contentType === 'application/octet-stream'
+        normalizedType.startsWith('application/') ||
+        normalizedType.startsWith('text/plain') ||
+        normalizedType === 'application/octet-stream'
       );
     }
 
     return false;
+  }
+
+  private looksLikeImage(buffer: Buffer): boolean {
+    if (buffer.length < 4) {
+      return false;
+    }
+
+    const jpeg = buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+    const png =
+      buffer[0] === 0x89 &&
+      buffer[1] === 0x50 &&
+      buffer[2] === 0x4e &&
+      buffer[3] === 0x47;
+    const gif =
+      buffer[0] === 0x47 &&
+      buffer[1] === 0x49 &&
+      buffer[2] === 0x46 &&
+      buffer[3] === 0x38;
+    const webp =
+      buffer.toString('ascii', 0, 4) === 'RIFF' &&
+      buffer.toString('ascii', 8, 12) === 'WEBP';
+
+    return jpeg || png || gif || webp;
+  }
+
+  private looksLikeAudio(buffer: Buffer): boolean {
+    if (buffer.length < 4) {
+      return false;
+    }
+
+    const id3 = buffer[0] === 0x49 && buffer[1] === 0x44 && buffer[2] === 0x33;
+    const mpegFrame =
+      buffer[0] === 0xff && (buffer[1] & 0xe0) === 0xe0; // MPEG frame sync
+    const ogg =
+      buffer[0] === 0x4f &&
+      buffer[1] === 0x67 &&
+      buffer[2] === 0x67 &&
+      buffer[3] === 0x53;
+    const riff =
+      buffer.toString('ascii', 0, 4) === 'RIFF' &&
+      buffer.toString('ascii', 8, 12) === 'WAVE';
+
+    return id3 || mpegFrame || ogg || riff;
   }
 
   private normalizeMediaSize(value: any): number | null {
