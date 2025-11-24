@@ -6,7 +6,7 @@
 - **Áudio** (`AUDIO`) – notas de voz/áudios.
 - **Documento** (`DOCUMENT`) – PDFs, planilhas, etc.
 
-Esses tipos são armazenados no banco em `messages.mediaType` e ficam disponíveis para download via endpoint dedicado.
+Esses tipos são armazenados no banco em `messages.mediaType`. O arquivo bruto é baixado da Evolution, salvo em disco (`storage/messages/<conversationId>/...`) e servido publicamente via `/media/...`.
 
 ## 2. Fluxo de Recebimento
 
@@ -14,7 +14,11 @@ Esses tipos são armazenados no banco em `messages.mediaType` e ficam disponíve
 2. O backend identifica o tipo de mídia, salva os metadados na tabela `messages`:
    - `mediaType`, `mediaFileName`, `mediaMimeType`, `mediaSize`, `mediaCaption`.
 3. `content` recebe um texto padrão (`[Imagem recebida]`, `[Áudio recebido]`, `[Documento recebido]`) caso não exista legenda.
-4. O frontend recebe o evento `message:new` com:
+4. O backend baixa a mídia, salva localmente e preenche os campos:
+   - `mediaStoragePath`: caminho relativo (`messages/<conversationId>/<file>`).
+   - `mediaPublicUrl`: `/media/messages/<conversationId>/<file>`.
+   - `mediaDownloadPath`: igual ao `mediaPublicUrl` (fallback para `/api/messages/:id/media` se ainda não houver cópia local).
+5. O frontend recebe o evento `message:new` com:
    ```json
    {
      "hasMedia": true,
@@ -22,10 +26,11 @@ Esses tipos são armazenados no banco em `messages.mediaType` e ficam disponíve
      "mediaFileName": "foto.jpg",
      "mediaMimeType": "image/jpeg",
      "mediaSize": 204800,
-     "mediaDownloadPath": "/api/messages/<id>/media"
+     "mediaPublicUrl": "/media/messages/d9a1.../2025-11-24-foto.jpg",
+     "mediaDownloadPath": "/media/messages/d9a1.../2025-11-24-foto.jpg"
    }
    ```
-5. Para exibir/baixar o arquivo, o frontend chama `GET /api/messages/:id/media` usando o token JWT.
+6. Para renderizar a imagem/áudio no chat, basta usar `mediaPublicUrl` (é um endpoint estático). Em cenários de fallback utilize `mediaDownloadPath` (`/api/messages/:id/media`), que exige token.
 
 ## 3. Fluxo de Envio
 
@@ -45,7 +50,7 @@ GET /api/messages/:id/media
 Authorization: Bearer <token>
 ```
 
-Responde com o arquivo original (stream). O backend faz proxy junto à Evolution API usando o `apikey`, mantendo as credenciais seguras.
+Responde com o arquivo original (stream). O backend lê o arquivo local se ele existir; caso já tenha sido limpo (ver seção 7), faz proxy junto à Evolution API.
 
 ## 6. Considerações para o Frontend
 
@@ -55,7 +60,13 @@ Responde com o arquivo original (stream). O backend faz proxy junto à Evolution
 - Para imagens, é possível gerar um `blob` e exibir com `<img>`.
 - Para documentos, faça o download ou abra em nova aba (dependendo do tipo/MIME).
 
-## 7. Próximos Passos Sugeridos
+## 7. Retenção e Limpeza Automática
+
+- Toda mídia local é mantida por **3 dias** (`MEDIA_RETENTION_DAYS`).
+- Um cron diário remove arquivos vencidos e limpa `mediaStoragePath` do banco.
+- Após o purge, `mediaPublicUrl` passa a ser `null` e `mediaDownloadPath` volta a `/api/messages/:id/media`. O frontend deve tratar ausência de URL exibindo algo como “Mídia expirada”.
+
+## 8. Próximos Passos Sugeridos
 
 - Implementar upload/forward de mídia enviada pelo operador (Evolution `sendFile`/`sendPTT`).
 - Criar thumbnails/previews no backend para agilizar a renderização de imagens grandes.

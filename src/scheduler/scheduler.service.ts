@@ -1,14 +1,24 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { ChatStatus, MessageDirection } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
+import { StorageService } from '../storage/storage.service';
 
 @Injectable()
 export class SchedulerService {
   private readonly logger = new Logger(SchedulerService.name);
+  private readonly mediaRetentionDays: number;
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly storageService: StorageService,
+    private readonly configService: ConfigService,
+  ) {
+    this.mediaRetentionDays =
+      this.configService.get<number>('storage.mediaRetentionDays') ?? 3;
+  }
 
   // Roda a cada hora
   @Cron(CronExpression.EVERY_HOUR)
@@ -172,6 +182,55 @@ export class SchedulerService {
       avgResponseTimeUser: avgUser,
       avgResponseTimeOperator: avgOperator,
     };
+  }
+
+  @Cron(CronExpression.EVERY_DAY_AT_2AM)
+  async cleanupExpiredMedia() {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - this.mediaRetentionDays);
+
+    const batchSize = 200;
+    let totalRemoved = 0;
+
+    while (true) {
+      const messages = await this.prisma.message.findMany({
+        where: {
+          mediaStoragePath: { not: null },
+          createdAt: { lt: cutoff },
+        },
+        select: { id: true, mediaStoragePath: true },
+        take: batchSize,
+      });
+
+      if (messages.length === 0) {
+        break;
+      }
+
+      for (const message of messages) {
+        if (message.mediaStoragePath) {
+          await this.storageService.deleteFile(message.mediaStoragePath);
+        }
+      }
+
+      await this.prisma.message.updateMany({
+        where: { id: { in: messages.map((msg) => msg.id) } },
+        data: { mediaStoragePath: null },
+      });
+
+      totalRemoved += messages.length;
+
+      if (messages.length < batchSize) {
+        break;
+      }
+    }
+
+    if (totalRemoved > 0) {
+      this.logger.log(
+        `${totalRemoved} mídias antigas removidas (> ${this.mediaRetentionDays} dias)`,
+      );
+    } else {
+      this.logger.debug('Nenhuma mídia antiga para remover');
+    }
   }
 }
 

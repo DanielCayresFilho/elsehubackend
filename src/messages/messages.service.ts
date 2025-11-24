@@ -6,6 +6,7 @@ import {
   Inject,
   forwardRef,
 } from '@nestjs/common';
+import { createReadStream } from 'fs';
 import { Message, MessageDirection, MessageVia, ChatStatus } from '@prisma/client';
 import axios from 'axios';
 
@@ -14,6 +15,7 @@ import { SendMessageDto } from './dto/send-message.dto';
 import { MessageResponseDto } from './dto/message-response.dto';
 import { ListMessagesQueryDto } from './dto/list-messages-query.dto';
 import { ChatGateway } from '../websockets/chat.gateway';
+import { StorageService } from '../storage/storage.service';
 
 type SupportedMediaType = 'IMAGE' | 'AUDIO' | 'DOCUMENT';
 
@@ -25,6 +27,7 @@ export class MessagesService {
     private readonly prisma: PrismaService,
     @Inject(forwardRef(() => ChatGateway))
     private readonly chatGateway: ChatGateway,
+    private readonly storageService: StorageService,
   ) {}
 
   async send(
@@ -115,6 +118,7 @@ export class MessagesService {
     mediaFileName?: string | null;
     mediaCaption?: string | null;
     mediaSize?: number | null;
+    mediaStoragePath?: string | null;
   }): Promise<MessageResponseDto> {
     const conversation = await this.prisma.conversation.findUnique({
       where: { id: data.conversationId },
@@ -140,6 +144,7 @@ export class MessagesService {
         mediaFileName: data.mediaFileName ?? null,
         mediaCaption: data.mediaCaption ?? null,
         mediaSize: data.mediaSize ?? null,
+        mediaStoragePath: data.mediaStoragePath ?? null,
         direction: MessageDirection.INBOUND,
         via: MessageVia.INBOUND,
         externalId: data.externalId ?? null,
@@ -224,8 +229,37 @@ export class MessagesService {
       },
     });
 
-    if (!message || !message.mediaUrl) {
+    if (!message) {
       throw new NotFoundException('Mídia não encontrada para esta mensagem');
+    }
+
+    if (message.mediaStoragePath) {
+      try {
+        const absolutePath =
+          this.storageService.resolveRelativePath(message.mediaStoragePath);
+        const stream = createReadStream(absolutePath);
+
+        return {
+          stream,
+          mimeType: message.mediaMimeType ?? 'application/octet-stream',
+          fileName: message.mediaFileName ?? `${message.mediaType ?? 'media'}-${message.id}`,
+          contentLength: message.mediaSize ?? undefined,
+        };
+      } catch (error: any) {
+        this.logger.warn('Falha ao ler mídia local, tentando fallback remoto', {
+          error: error.message,
+          messageId,
+        });
+        await this.storageService.deleteFile(message.mediaStoragePath);
+        await this.prisma.message.update({
+          where: { id: message.id },
+          data: { mediaStoragePath: null },
+        });
+      }
+    }
+
+    if (!message.mediaUrl) {
+      throw new NotFoundException('Mídia não disponível');
     }
 
     if (!message.conversation || !message.conversation.serviceInstance) {
@@ -328,19 +362,26 @@ export class MessagesService {
   }
 
   private toResponse(message: Message & { sender?: { name: string } | null }): MessageResponseDto {
+    const publicUrl = message.mediaStoragePath
+      ? `/media/${message.mediaStoragePath.replace(/\\/g, '/').replace(/^\//, '')}`
+      : null;
+
     return {
       id: message.id,
       conversationId: message.conversationId,
       senderId: message.senderId,
       senderName: message.sender?.name ?? null,
       content: message.content,
-      hasMedia: Boolean(message.mediaUrl),
+      hasMedia: Boolean(message.mediaUrl || message.mediaStoragePath),
       mediaType: message.mediaType,
       mediaFileName: message.mediaFileName,
       mediaMimeType: message.mediaMimeType,
       mediaSize: message.mediaSize,
       mediaCaption: message.mediaCaption,
-      mediaDownloadPath: message.mediaUrl ? `/api/messages/${message.id}/media` : null,
+      mediaStoragePath: message.mediaStoragePath,
+      mediaPublicUrl: publicUrl,
+      mediaDownloadPath:
+        publicUrl ?? (message.mediaUrl ? `/api/messages/${message.id}/media` : null),
       direction: message.direction,
       via: message.via,
       externalId: message.externalId,

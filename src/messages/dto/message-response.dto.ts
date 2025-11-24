@@ -12,6 +12,8 @@ export class MessageResponseDto {
   mediaMimeType?: string | null;
   mediaSize?: number | null;
   mediaCaption?: string | null;
+  mediaStoragePath?: string | null;
+  mediaPublicUrl?: string | null;
   mediaDownloadPath?: string | null;
   direction: MessageDirection;
   via: MessageVia;

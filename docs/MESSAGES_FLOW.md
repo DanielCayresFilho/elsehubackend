@@ -85,12 +85,12 @@ async handleSendMessage(client: Socket, data: { conversationId, content }) {
    - Emite evento WebSocket `message:new`
 5. Frontend recebe a atualização em tempo real
 
-#### Download Seguro da Mídia
+#### Download/Renderização da Mídia
 
-- Endpoint: `GET /api/messages/:id/media`
-- Requer `Authorization: Bearer <token>`
-- Backend faz proxy do arquivo hospedado na Evolution API usando o `apikey`
-- Frontend sempre deve usar este endpoint (não usamos URLs públicas da Evolution)
+- Toda mídia inbound é baixada e salva em `storage/messages/<conversationId>/...`.
+- O arquivo fica exposto publicamente via `/media/messages/<conversationId>/<arquivo>` (campo `mediaPublicUrl`).
+- O endpoint `GET /api/messages/:id/media` continua disponível como **fallback autenticado** (usa o token e, se necessário, rebaixa da Evolution).
+- Retenção padrão: **3 dias** (configurável via `MEDIA_RETENTION_DAYS`). Depois disso `mediaPublicUrl` fica `null` e o frontend deve exibir “mídia expirada”.
 
 **Eventos da Evolution API**:
 - `messages.upsert`: Nova mensagem recebida
@@ -109,6 +109,10 @@ async processEvolutionMessage(payload) {
   // Buscar ou criar conversa
   let conversation = await this.findOrCreateConversation(contact, instance);
   
+  const storedMedia = media?.url
+    ? await this.persistEvolutionMedia(media, serviceInstance, conversation.id)
+    : null;
+
   // Criar mensagem
   const message = await this.messagesService.receiveInbound({
     conversationId: conversation.id,
@@ -119,6 +123,7 @@ async processEvolutionMessage(payload) {
     mediaFileName: media?.fileName,
     mediaCaption: media?.caption,
     mediaSize: media?.size,
+    mediaStoragePath: storedMedia?.storagePath,
     externalId: data.key.id,
   });
   
@@ -205,6 +210,8 @@ Cada mensagem é salva com:
 - `content`: Texto da mensagem (ou texto padrão `[Imagem recebida]`, etc.)
 - `mediaType`: `IMAGE`, `AUDIO`, `DOCUMENT` (opcional)
 - `mediaFileName`, `mediaMimeType`, `mediaSize`, `mediaCaption`, `mediaUrl`: metadados da mídia recebida
+- `mediaStoragePath`: caminho relativo dentro de `storage/` (usado para servir `/media/...`)
+- `mediaPublicUrl`/`mediaDownloadPath`: URLs prontas para o frontend consumir
 - `direction`: `INBOUND` (recebida) ou `OUTBOUND` (enviada)
 - `via`: `INBOUND`, `CHAT_MANUAL`, ou `CAMPAIGN`
 - `externalId`: ID da mensagem na Evolution/Meta API

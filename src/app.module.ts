@@ -1,7 +1,9 @@
 import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common';
+import { ServeStaticModule } from '@nestjs/serve-static';
 import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import * as path from 'path';
 
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -29,6 +31,19 @@ import { RolesGuard } from './common/guards/roles.guard';
 
 @Module({
   imports: [
+    ServeStaticModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => [
+        {
+          rootPath: path.resolve(
+            process.cwd(),
+            configService.get<string>('storage.basePath') ?? './storage',
+          ),
+          serveRoot: '/media',
+        },
+      ],
+    }),
     ConfigModule.forRoot({
       isGlobal: true,
       load: [configuration],

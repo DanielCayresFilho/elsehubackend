@@ -20,5 +20,6 @@ export const validationSchema = Joi.object({
   RATE_LIMIT_MAX: Joi.number().default(30),
   BULLMQ_PREFIX: Joi.string().default('elsehu'),
   STORAGE_PATH: Joi.string().default('./storage'),
+  MEDIA_RETENTION_DAYS: Joi.number().min(1).default(3),
   ALLOWED_ORIGINS: Joi.string().allow('', null),
 });

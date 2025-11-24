@@ -217,7 +217,10 @@ O sistema envia **e recebe** mensagens reais via Evolution API quando o provedor
 Quando recebidas:
 - `hasMedia: true` no payload do chat/WebSocket
 - Metadados salvos em `mediaFileName`, `mediaMimeType`, `mediaSize`, `mediaCaption`
-- O frontend baixa o arquivo via `GET /api/messages/:id/media`
+- O backend baixa a mídia, salva em disco (`storage/messages/<conversationId>/...`) e expõe **duas** URLs:
+  - `mediaPublicUrl`: `/media/messages/<conversationId>/<arquivo>` (liberada sem token para renderizar `<img>`, `<audio>`, etc.)
+  - `mediaDownloadPath`: normalmente igual a `mediaPublicUrl`; se o arquivo local já tiver expirado, cai para `/api/messages/:id/media` (requer JWT).
+- As cópias locais são retidas por **3 dias** (configurável via `MEDIA_RETENTION_DAYS`). Após o purge, os campos acima ficam `null` e o frontend deve mostrar “Mídia expirada”.
 
 Quando recebemos **stickers** ou **vídeos**, criamos uma mensagem automática avisando que ainda não suportamos esse tipo.
 

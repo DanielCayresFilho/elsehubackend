@@ -167,16 +167,18 @@ Toda mensagem agora pode conter:
 ```json
 {
   "hasMedia": true,
-  "mediaType": "IMAGE", // IMAGE | AUDIO | DOCUMENT
+  "mediaType": "IMAGE",
   "mediaFileName": "foto.jpg",
   "mediaMimeType": "image/jpeg",
   "mediaSize": 204800,
   "mediaCaption": "Comprovante",
-  "mediaDownloadPath": "/api/messages/<id>/media"
+  "mediaPublicUrl": "/media/messages/<conversationId>/2025-11-24-foto.jpg",
+  "mediaDownloadPath": "/media/messages/<conversationId>/2025-11-24-foto.jpg"
 }
 ```
 
-- Se `hasMedia = true`, use `mediaDownloadPath` para buscar o arquivo.
+- Priorize `mediaPublicUrl` para renderizar `<img>`, `<audio>` etc. (é um endpoint público, sem token).
+- Use `mediaDownloadPath` como fallback autenticado (`/api/messages/:id/media`), que exige o JWT.
 - `content` terá um texto automático, ex.: `[Imagem recebida]`, caso não exista legenda.
 
 ### Baixar Arquivo
@@ -196,6 +198,11 @@ fetch(`/api/messages/${messageId}/media`, {
 - Vídeos e stickers ainda não são processados.
 - Quando recebidos, aparecerá uma mensagem automática:
   > "Recebemos um vídeo/sticker, mas esse tipo de mídia ainda não é suportado."
+
+### Retenção
+
+- As mídias locais são mantidas por **3 dias**. Depois disso, `mediaPublicUrl` e `mediaDownloadPath` podem ficar `null`.
+- Ao detectar `null`, exiba uma mensagem amigável (“Mídia expirada”) e não tente renderizar o componente.
 
 ---
 

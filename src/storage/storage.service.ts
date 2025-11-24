@@ -12,6 +12,7 @@ export type SaveFileOptions = {
 export type SavedFileMetadata = {
   filename: string;
   relativePath: string;
+  relativeToBasePath: string;
   absolutePath: string;
   size: number;
 };
@@ -36,15 +37,16 @@ export class StorageService implements OnModuleInit {
   }
 
   async saveFile(options: SaveFileOptions): Promise<SavedFileMetadata> {
-    const subdirectory = options.subdirectory
-      ? options.subdirectory.replace(/^\/+/, '')
-      : '';
+    const subdirectory = this.sanitizeSubdirectory(options.subdirectory);
     const targetDir = path.join(this.basePath, subdirectory);
     await this.ensureDirectory(targetDir);
 
     const filename = this.generateFilename(options.originalName);
     const absolutePath = path.join(targetDir, filename);
     const relativePath = path.relative(process.cwd(), absolutePath);
+    const relativeToBasePath = this.toPosixPath(
+      path.relative(this.basePath, absolutePath),
+    );
 
     await fs.writeFile(absolutePath, options.buffer);
     this.logger.debug(`Arquivo salvo em ${absolutePath}`);
@@ -52,13 +54,58 @@ export class StorageService implements OnModuleInit {
     return {
       filename,
       relativePath,
+      relativeToBasePath,
       absolutePath,
       size: options.buffer.length,
     };
   }
 
+  resolveRelativePath(relativePath: string): string {
+    const sanitized = this.sanitizeRelativePath(relativePath);
+    return path.join(this.basePath, sanitized);
+  }
+
+  toPublicPath(relativePath: string): string {
+    return this.toPosixPath(this.sanitizeRelativePath(relativePath));
+  }
+
+  async deleteFile(relativePath: string): Promise<void> {
+    if (!relativePath) {
+      return;
+    }
+    const targetPath = this.resolveRelativePath(relativePath);
+    try {
+      await fs.rm(targetPath, { force: true });
+      this.logger.debug(`Arquivo removido: ${targetPath}`);
+    } catch (error: any) {
+      this.logger.warn(`Falha ao remover arquivo ${targetPath}: ${error.message}`);
+    }
+  }
+
   private async ensureDirectory(directoryPath: string) {
     await fs.mkdir(directoryPath, { recursive: true });
+  }
+
+  private sanitizeSubdirectory(subdirectory?: string) {
+    if (!subdirectory) {
+      return '';
+    }
+
+    return subdirectory
+      .split(/[/\\]+/)
+      .filter((segment) => segment && segment !== '..')
+      .join(path.sep);
+  }
+
+  private sanitizeRelativePath(relativePath: string) {
+    return relativePath
+      .split(/[/\\]+/)
+      .filter((segment) => segment && segment !== '..')
+      .join(path.sep);
+  }
+
+  private toPosixPath(filePath: string) {
+    return filePath.split(path.sep).join('/');
   }
 
   private generateFilename(originalName: string) {

@@ -160,6 +160,7 @@ model Message {
   mediaFileName  String?
   mediaCaption   String?
   mediaSize      Int?
+  mediaStoragePath String?
   direction      MessageDirection // INBOUND ou OUTBOUND
   via            MessageVia       // INBOUND, CAMPAIGN, CHAT_MANUAL
   

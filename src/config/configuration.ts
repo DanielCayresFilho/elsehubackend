@@ -30,6 +30,7 @@ export default () => ({
   },
   storage: {
     basePath: process.env.STORAGE_PATH ?? './storage',
+    mediaRetentionDays: parseInt(process.env.MEDIA_RETENTION_DAYS ?? '3', 10),
   },
   cors: {
     allowedOrigins: (process.env.ALLOWED_ORIGINS ?? '')

@@ -1,10 +1,12 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import axios from 'axios';
 import { ChatStatus, MessageDirection } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { MessagesService } from '../messages/messages.service';
 import { ConversationsService } from '../conversations/conversations.service';
 import { ChatGateway } from '../websockets/chat.gateway';
+import { StorageService } from '../storage/storage.service';
 import { MetaWebhookDto } from './dto/meta-webhook.dto';
 import { EvolutionWebhookDto } from './dto/evolution-webhook.dto';
 
@@ -28,6 +30,7 @@ export class WebhooksService {
     private readonly messagesService: MessagesService,
     private readonly conversationsService: ConversationsService,
     private readonly chatGateway: ChatGateway,
+    private readonly storageService: StorageService,
   ) {}
 
   async handleMetaWebhook(payload: MetaWebhookDto): Promise<void> {
@@ -300,6 +303,17 @@ export class WebhooksService {
       return;
     }
 
+    let storedMediaMetadata: { storagePath: string | null; size: number | null } | null =
+      null;
+
+    if (mediaPayload?.url) {
+      storedMediaMetadata = await this.persistEvolutionMedia(
+        mediaPayload,
+        serviceInstance,
+        conversation.id,
+      );
+    }
+
     // Criar mensagem
     const newMessage = await this.messagesService.receiveInbound({
       conversationId: conversation.id,
@@ -310,7 +324,8 @@ export class WebhooksService {
       mediaMimeType: mediaPayload?.mimeType ?? null,
       mediaFileName: mediaPayload?.fileName ?? null,
       mediaCaption: mediaPayload?.caption ?? null,
-      mediaSize: mediaPayload?.size ?? null,
+      mediaSize: storedMediaMetadata?.size ?? mediaPayload?.size ?? null,
+      mediaStoragePath: storedMediaMetadata?.storagePath ?? null,
     });
 
     // Notificar via WebSocket
@@ -466,6 +481,45 @@ export class WebhooksService {
     });
 
     this.chatGateway.emitNewMessage(conversationId, message);
+  }
+
+  private async persistEvolutionMedia(
+    mediaPayload: EvolutionMediaPayload,
+    serviceInstance: any,
+    conversationId: string,
+  ): Promise<{ storagePath: string; size: number } | null> {
+    if (!mediaPayload.url) {
+      return null;
+    }
+
+    const credentials = (serviceInstance.credentials as Record<string, any>) || {};
+
+    try {
+      const response = await axios.get(mediaPayload.url, {
+        responseType: 'arraybuffer',
+        headers: credentials.apiToken ? { apikey: credentials.apiToken } : undefined,
+      });
+
+      const buffer = Buffer.from(response.data);
+      const savedFile = await this.storageService.saveFile({
+        buffer,
+        originalName:
+          mediaPayload.fileName ??
+          `${mediaPayload.type?.toLowerCase() ?? 'media'}-${conversationId}`,
+        subdirectory: `messages/${conversationId}`,
+      });
+
+      return {
+        storagePath: savedFile.relativeToBasePath,
+        size: savedFile.size,
+      };
+    } catch (error: any) {
+      this.logger.error('Erro ao baixar/salvar mídia localmente', {
+        error: error.message,
+        mediaType: mediaPayload.type,
+      });
+      return null;
+    }
   }
 
   private normalizeMediaSize(value: any): number | null {
