@@ -505,6 +505,21 @@ export class WebhooksService {
       if (urlResult) {
         buffer = urlResult.buffer;
         contentType = urlResult.contentType;
+
+        if (
+          !this.isValidMediaContent(
+            mediaPayload.type,
+            contentType ?? mediaPayload.mimeType ?? '',
+            buffer,
+          )
+        ) {
+          this.logger.warn('Mídia recebida via URL inválida, tentando Base64', {
+            requestedType: mediaPayload.type,
+            contentType,
+          });
+          buffer = null;
+          contentType = null;
+        }
       }
 
       if (!buffer && messageId) {
