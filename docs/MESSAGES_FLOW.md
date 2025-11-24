@@ -88,6 +88,8 @@ async handleSendMessage(client: Socket, data: { conversationId, content }) {
 #### Download/Renderização da Mídia
 
 - Toda mídia inbound é baixada e salva em `storage/messages/<conversationId>/...`.
+- Se a Evolution estiver em modo “URL”, usamos o `imageMessage.url`.
+- Se estiver em modo **Base64**, o backend chama `POST /chat/getBase64FromMediaMessage/{instance}` passando `message.key.id`, decodifica o retorno e salva o arquivo local.
 - O arquivo fica exposto publicamente via `/media/messages/<conversationId>/<arquivo>` (campo `mediaPublicUrl`).
 - O endpoint `GET /api/messages/:id/media` continua disponível como **fallback autenticado** (usa o token e, se necessário, rebaixa da Evolution).
 - Retenção padrão: **3 dias** (configurável via `MEDIA_RETENTION_DAYS`). Depois disso `mediaPublicUrl` fica `null` e o frontend deve exibir “mídia expirada”.

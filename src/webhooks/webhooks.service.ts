@@ -311,11 +311,12 @@ export class WebhooksService {
     let storedMediaMetadata: { storagePath: string | null; size: number | null } | null =
       null;
 
-    if (mediaPayload?.url) {
+    if (mediaPayload) {
       storedMediaMetadata = await this.persistEvolutionMedia(
         mediaPayload,
         serviceInstance,
         conversation.id,
+        data.key?.id,
       );
     }
 
@@ -492,30 +493,47 @@ export class WebhooksService {
     mediaPayload: EvolutionMediaPayload,
     serviceInstance: any,
     conversationId: string,
+    messageId?: string,
   ): Promise<{ storagePath: string; size: number } | null> {
-    if (!mediaPayload.url) {
-      return null;
-    }
-
     const credentials = (serviceInstance.credentials as Record<string, any>) || {};
 
     try {
-      const response = await axios.get(mediaPayload.url, {
-        responseType: 'arraybuffer',
-        headers: credentials.apiToken ? { apikey: credentials.apiToken } : undefined,
-        validateStatus: (status) => status >= 200 && status < 300,
-      });
+      let buffer: Buffer | null = null;
+      let contentType: string | null = null;
 
-      const contentType =
-        (response.headers['content-type'] as string | undefined)?.toLowerCase() ?? '';
-      const buffer = Buffer.from(response.data);
+      const urlResult = await this.downloadMediaFromUrl(mediaPayload, credentials);
+      if (urlResult) {
+        buffer = urlResult.buffer;
+        contentType = urlResult.contentType;
+      }
 
-      if (!this.isValidMediaContent(mediaPayload.type, contentType, buffer)) {
+      if (!buffer && messageId) {
+        const base64Result = await this.downloadMediaFromBase64(
+          mediaPayload,
+          credentials,
+          messageId,
+        );
+        if (base64Result) {
+          buffer = base64Result.buffer;
+          contentType = base64Result.contentType;
+        }
+      }
+
+      if (!buffer) {
+        throw new BadRequestException('Falha ao baixar mídia da Evolution');
+      }
+
+      if (
+        !this.isValidMediaContent(
+          mediaPayload.type,
+          contentType ?? mediaPayload.mimeType ?? '',
+          buffer,
+        )
+      ) {
         const preview = buffer.toString('utf8', 0, 200);
         this.logger.error('Conteúdo inválido ao baixar mídia da Evolution', {
           requestedType: mediaPayload.type,
           contentType,
-          status: response.status,
           preview,
         });
         throw new BadRequestException('Falha ao baixar mídia da Evolution (tipo inválido)');
@@ -540,6 +558,123 @@ export class WebhooksService {
       });
       return null;
     }
+  }
+
+  private async downloadMediaFromUrl(
+    mediaPayload: EvolutionMediaPayload,
+    credentials: Record<string, any>,
+  ): Promise<{ buffer: Buffer; contentType: string | null } | null> {
+    if (!mediaPayload.url) {
+      return null;
+    }
+
+    try {
+      const response = await axios.get(mediaPayload.url, {
+        responseType: 'arraybuffer',
+        headers: credentials.apiToken ? { apikey: credentials.apiToken } : undefined,
+        validateStatus: (status) => status >= 200 && status < 300,
+      });
+
+      const contentType =
+        (response.headers['content-type'] as string | undefined)?.toLowerCase() ?? null;
+
+      return {
+        buffer: Buffer.from(response.data),
+        contentType,
+      };
+    } catch (error: any) {
+      this.logger.warn('Falha ao baixar mídia via URL da Evolution', {
+        error: error.message,
+        mediaType: mediaPayload.type,
+      });
+      return null;
+    }
+  }
+
+  private async downloadMediaFromBase64(
+    mediaPayload: EvolutionMediaPayload,
+    credentials: Record<string, any>,
+    messageId: string,
+  ): Promise<{ buffer: Buffer; contentType: string | null } | null> {
+    const { serverUrl, apiToken, instanceName } = credentials;
+    if (!serverUrl || !apiToken || !instanceName) {
+      this.logger.warn(
+        'Credenciais incompletas para download Base64 da Evolution',
+        credentials,
+      );
+      return null;
+    }
+
+    const endpoint = `${serverUrl.replace(/\/$/, '')}/chat/getBase64FromMediaMessage/${instanceName}`;
+
+    try {
+      const response = await axios.post(
+        endpoint,
+        {
+          message: {
+            key: {
+              id: messageId,
+            },
+          },
+        },
+        {
+          headers: {
+            apikey: apiToken,
+            'Content-Type': 'application/json',
+          },
+          timeout: 20000,
+        },
+      );
+
+      const base64Payload =
+        response.data?.base64 || response.data?.data || response.data?.result?.base64;
+      const contentType =
+        response.data?.mimetype ||
+        response.data?.mimeType ||
+        response.data?.type ||
+        mediaPayload.mimeType ||
+        null;
+
+      if (!base64Payload || typeof base64Payload !== 'string') {
+        this.logger.error('Resposta Base64 da Evolution sem campo base64', {
+          status: response.status,
+          dataKeys: Object.keys(response.data || {}),
+        });
+        return null;
+      }
+
+      const { buffer, mimeTypeFromData } = this.decodeBase64Payload(base64Payload);
+
+      return {
+        buffer,
+        contentType: mimeTypeFromData || contentType,
+      };
+    } catch (error: any) {
+      this.logger.error('Erro ao obter mídia em Base64 da Evolution', {
+        error: error.message,
+        mediaType: mediaPayload.type,
+      });
+      return null;
+    }
+  }
+
+  private decodeBase64Payload(base64Payload: string): {
+    buffer: Buffer;
+    mimeTypeFromData: string | null;
+  } {
+    const match = /^data:(?<mime>[^;]+);base64,(?<data>.+)$/i.exec(base64Payload);
+
+    if (match?.groups?.mime && match.groups.data) {
+      return {
+        buffer: Buffer.from(match.groups.data, 'base64'),
+        mimeTypeFromData: match.groups.mime.toLowerCase(),
+      };
+    }
+
+    return {
+      buffer: Buffer.from(base64Payload, 'base64'),
+      mimeTypeFromData: null,
+    };
   }
 
   private isValidMediaContent(

@@ -6,7 +6,12 @@
 - **Áudio** (`AUDIO`) – notas de voz/áudios.
 - **Documento** (`DOCUMENT`) – PDFs, planilhas, etc.
 
-Esses tipos são armazenados no banco em `messages.mediaType`. O arquivo bruto é baixado da Evolution, salvo em disco (`storage/messages/<conversationId>/...`) e servido publicamente via `/media/...`.
+Esses tipos são armazenados no banco em `messages.mediaType`. O backend:
+
+1. Detecta o tipo de mídia no webhook.
+2. Tenta baixar o arquivo usando o `imageMessage.url` da Evolution.
+3. Caso a instância esteja em **modo Base64**, chama automaticamente o endpoint `POST /chat/getBase64FromMediaMessage/{instance}` da Evolution, decodifica o base64 retornado e grava o arquivo localmente.
+4. Salva a mídia em `storage/messages/<conversationId>/...` e a expõe via `/media/...`.
 
 ## 2. Fluxo de Recebimento
 

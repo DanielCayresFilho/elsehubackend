@@ -7,7 +7,7 @@ Documento único explicando como o frontend deve tratar imagens, áudios e docum
 ## 1. O que o backend faz automaticamente
 
 1. Evolution envia o webhook com a mídia.
-2. O backend baixa o arquivo direto da Evolution (`axios` com `apikey` da instância).
+2. O backend baixa o arquivo direto da Evolution (`axios` com `apikey` da instância) ou, se a instância estiver em modo **Base64**, chama automaticamente `POST /chat/getBase64FromMediaMessage/{instance}` e decodifica o retorno.
 3. O arquivo é salvo em disco: `storage/messages/<conversationId>/<arquivo>`.
 4. A mensagem no banco recebe:
    - `hasMedia: true`
