@@ -154,6 +154,12 @@ model Message {
   senderId       String?          // ID do User se for operador, ou null se for sistema/cliente
   
   content        String           @db.Text
+  mediaType      String?
+  mediaUrl       String?
+  mediaMimeType  String?
+  mediaFileName  String?
+  mediaCaption   String?
+  mediaSize      Int?
   direction      MessageDirection // INBOUND ou OUTBOUND
   via            MessageVia       // INBOUND, CAMPAIGN, CHAT_MANUAL
   

@@ -202,10 +202,24 @@ Sistema de envio e recebimento de mensagens via WhatsApp, integrado com Evolutio
 
 ### Integração com Evolution API
 
-O sistema envia mensagens reais via Evolution API quando o provedor da instância é `EVOLUTION_API`. O backend:
+O sistema envia **e recebe** mensagens reais via Evolution API quando o provedor da instância é `EVOLUTION_API`. O backend:
 1. Cria a mensagem no banco com status `pending`
 2. Chama a Evolution API: `POST /message/sendText/{instanceName}`
 3. Atualiza a mensagem com o `externalId` retornado e o status
+4. Nos webhooks, identifica mídias (imagem/áudio/documento) e armazena os metadados
+
+### Mídias Suportadas
+
+- **Imagem (`IMAGE`)**
+- **Áudio (`AUDIO`)**
+- **Documento (`DOCUMENT`)**
+
+Quando recebidas:
+- `hasMedia: true` no payload do chat/WebSocket
+- Metadados salvos em `mediaFileName`, `mediaMimeType`, `mediaSize`, `mediaCaption`
+- O frontend baixa o arquivo via `GET /api/messages/:id/media`
+
+Quando recebemos **stickers** ou **vídeos**, criamos uma mensagem automática avisando que ainda não suportamos esse tipo.
 
 ### Status das Mensagens
 
@@ -270,6 +284,12 @@ O sistema envia mensagens reais via Evolution API quando o provedor da instânci
   "senderId": "uuid-do-operador",
   "senderName": "João Silva",
   "content": "Olá! Como posso ajudar?",
+  "hasMedia": false,
+  "mediaType": null,
+  "mediaFileName": null,
+  "mediaMimeType": null,
+  "mediaSize": null,
+  "mediaDownloadPath": null,
   "direction": "OUTBOUND",
   "via": "CHAT_MANUAL",
   "externalId": "3EB001A01F2AFFDE364543",
@@ -319,6 +339,9 @@ GET /api/messages/conversation/uuid-da-conversa?page=1&limit=50
       "senderId": null,
       "senderName": null,
       "content": "Olá, preciso de ajuda",
+      "hasMedia": false,
+      "mediaType": null,
+      "mediaDownloadPath": null,
       "direction": "INBOUND",
       "via": "INBOUND",
       "externalId": "evol_123",
@@ -331,6 +354,9 @@ GET /api/messages/conversation/uuid-da-conversa?page=1&limit=50
       "senderId": "uuid-operador",
       "senderName": "João Silva",
       "content": "Olá! Como posso ajudar?",
+      "hasMedia": false,
+      "mediaType": null,
+      "mediaDownloadPath": null,
       "direction": "OUTBOUND",
       "via": "CHAT_MANUAL",
       "externalId": "3EB001A01F2AFFDE364543",
@@ -378,6 +404,9 @@ GET /api/messages/conversation/uuid-da-conversa?page=1&limit=50
   "senderId": "uuid-operador",
   "senderName": "João Silva",
   "content": "Olá! Como posso ajudar?",
+  "hasMedia": false,
+  "mediaType": null,
+  "mediaDownloadPath": null,
   "direction": "OUTBOUND",
   "via": "CHAT_MANUAL",
   "externalId": "3EB001A01F2AFFDE364543",
@@ -389,6 +418,25 @@ GET /api/messages/conversation/uuid-da-conversa?page=1&limit=50
 **Erros Possíveis**:
 - `404 Not Found`: Mensagem não encontrada
 - `401 Unauthorized`: Token de autenticação inválido ou ausente
+
+#### Baixar Mídia de uma Mensagem
+
+**GET** `/api/messages/:id/media`
+
+**Roles**: `ADMIN`, `SUPERVISOR`, `OPERATOR`
+
+**Descrição**: Faz proxy seguro do arquivo armazenado na Evolution API.
+
+**Comportamento**:
+- Busca a mensagem no banco
+- Recupera a URL interna e credenciais da instância
+- Faz download via Evolution usando `apikey`
+- Faz stream do arquivo para o cliente
+
+**Erros Possíveis**:
+- `404 Not Found`: Mensagem não existe ou não possui mídia
+- `400 Bad Request`: Provedor ainda não suportado (Meta)
+- `401 Unauthorized`: Token inválido
 
 ---
 

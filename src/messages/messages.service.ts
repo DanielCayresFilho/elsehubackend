@@ -1,4 +1,11 @@
-import { Injectable, NotFoundException, BadRequestException, Logger, Inject, forwardRef } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  Logger,
+  Inject,
+  forwardRef,
+} from '@nestjs/common';
 import { Message, MessageDirection, MessageVia, ChatStatus } from '@prisma/client';
 import axios from 'axios';
 
@@ -7,6 +14,8 @@ import { SendMessageDto } from './dto/send-message.dto';
 import { MessageResponseDto } from './dto/message-response.dto';
 import { ListMessagesQueryDto } from './dto/list-messages-query.dto';
 import { ChatGateway } from '../websockets/chat.gateway';
+
+type SupportedMediaType = 'IMAGE' | 'AUDIO' | 'DOCUMENT';
 
 @Injectable()
 export class MessagesService {
@@ -98,8 +107,14 @@ export class MessagesService {
 
   async receiveInbound(data: {
     conversationId: string;
-    content: string;
+    content?: string;
     externalId?: string;
+    mediaType?: SupportedMediaType | null;
+    mediaUrl?: string | null;
+    mediaMimeType?: string | null;
+    mediaFileName?: string | null;
+    mediaCaption?: string | null;
+    mediaSize?: number | null;
   }): Promise<MessageResponseDto> {
     const conversation = await this.prisma.conversation.findUnique({
       where: { id: data.conversationId },
@@ -109,11 +124,22 @@ export class MessagesService {
       throw new NotFoundException('Conversa não encontrada');
     }
 
+    const normalizedContent =
+      data.content && data.content.trim().length > 0
+        ? data.content
+        : this.getDefaultContentForMedia(data.mediaType);
+
     const message = await this.prisma.message.create({
       data: {
         conversationId: data.conversationId,
         senderId: null, // Cliente não tem userId
-        content: data.content,
+        content: normalizedContent,
+        mediaType: data.mediaType ?? null,
+        mediaUrl: data.mediaUrl ?? null,
+        mediaMimeType: data.mediaMimeType ?? null,
+        mediaFileName: data.mediaFileName ?? null,
+        mediaCaption: data.mediaCaption ?? null,
+        mediaSize: data.mediaSize ?? null,
         direction: MessageDirection.INBOUND,
         via: MessageVia.INBOUND,
         externalId: data.externalId ?? null,
@@ -186,6 +212,63 @@ export class MessagesService {
     });
   }
 
+  async downloadMedia(messageId: string) {
+    const message = await this.prisma.message.findUnique({
+      where: { id: messageId },
+      include: {
+        conversation: {
+          include: {
+            serviceInstance: true,
+          },
+        },
+      },
+    });
+
+    if (!message || !message.mediaUrl) {
+      throw new NotFoundException('Mídia não encontrada para esta mensagem');
+    }
+
+    if (!message.conversation || !message.conversation.serviceInstance) {
+      throw new NotFoundException('Instância da conversa não encontrada para a mídia solicitada');
+    }
+
+    if (message.conversation.serviceInstance.provider !== 'EVOLUTION_API') {
+      throw new BadRequestException('Download de mídia ainda não suportado para este provedor');
+    }
+
+    const credentials = message.conversation.serviceInstance.credentials as Record<string, any>;
+    const absoluteUrl = this.buildAbsoluteMediaUrl(message.mediaUrl, credentials?.serverUrl);
+
+    if (!absoluteUrl) {
+      throw new BadRequestException('URL da mídia não pôde ser resolvida');
+    }
+
+    try {
+      const response = await axios.get(absoluteUrl, {
+        responseType: 'stream',
+        headers: {
+          apikey: credentials?.apiToken,
+        },
+      });
+
+      return {
+        stream: response.data,
+        mimeType: message.mediaMimeType ?? 'application/octet-stream',
+        fileName: message.mediaFileName ?? `${message.mediaType ?? 'media'}-${message.id}`,
+        contentLength: response.headers['content-length'],
+      };
+    } catch (error: any) {
+      this.logger.error('Erro ao baixar mídia da Evolution API', {
+        error: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+      });
+      throw new BadRequestException(
+        `Não foi possível baixar a mídia: ${error.response?.data?.message || error.message}`,
+      );
+    }
+  }
+
   private async sendViaEvolutionAPI(conversation: any, message: Message): Promise<void> {
     const credentials = conversation.serviceInstance.credentials as Record<string, any>;
     const { serverUrl, apiToken, instanceName } = credentials;
@@ -251,12 +334,48 @@ export class MessagesService {
       senderId: message.senderId,
       senderName: message.sender?.name ?? null,
       content: message.content,
+      hasMedia: Boolean(message.mediaUrl),
+      mediaType: message.mediaType,
+      mediaFileName: message.mediaFileName,
+      mediaMimeType: message.mediaMimeType,
+      mediaSize: message.mediaSize,
+      mediaCaption: message.mediaCaption,
+      mediaDownloadPath: message.mediaUrl ? `/api/messages/${message.id}/media` : null,
       direction: message.direction,
       via: message.via,
       externalId: message.externalId,
       status: message.status,
       createdAt: message.createdAt,
     };
+  }
+
+  private getDefaultContentForMedia(mediaType?: SupportedMediaType | null): string {
+    switch (mediaType) {
+      case 'IMAGE':
+        return '[Imagem recebida]';
+      case 'AUDIO':
+        return '[Áudio recebido]';
+      case 'DOCUMENT':
+        return '[Documento recebido]';
+      default:
+        return '[Mensagem recebida]';
+    }
+  }
+
+  private buildAbsoluteMediaUrl(url: string, serverUrl?: string): string | null {
+    if (!url) {
+      return null;
+    }
+
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      return url;
+    }
+
+    if (!serverUrl) {
+      return null;
+    }
+
+    return `${serverUrl.replace(/\/$/, '')}/${url.replace(/^\//, '')}`;
   }
 }
 

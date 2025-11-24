@@ -8,6 +8,17 @@ import { ChatGateway } from '../websockets/chat.gateway';
 import { MetaWebhookDto } from './dto/meta-webhook.dto';
 import { EvolutionWebhookDto } from './dto/evolution-webhook.dto';
 
+type EvolutionSupportedMediaType = 'IMAGE' | 'AUDIO' | 'DOCUMENT';
+
+interface EvolutionMediaPayload {
+  type: EvolutionSupportedMediaType;
+  url: string | null;
+  mimeType: string | null;
+  fileName: string | null;
+  caption: string | null;
+  size: number | null;
+}
+
 @Injectable()
 export class WebhooksService {
   private readonly logger = new Logger(WebhooksService.name);
@@ -205,35 +216,19 @@ export class WebhooksService {
       original: data.key?.remoteJid,
     });
     
+    const mediaPayload = this.extractEvolutionMediaPayload(data, serviceInstance);
     const messageText = this.extractEvolutionMessageText(data);
 
-    this.logger.log(`Texto extraído da mensagem: ${messageText ? `"${messageText.substring(0, 50)}"` : 'NENHUM'}`, {
-      hasMessage: !!data.message,
-      messageKeys: data.message ? Object.keys(data.message) : [],
-    });
-
-    if (!messageText) {
-      // Verificar se é mídia
-      const hasMedia = !!(
-        data.message?.imageMessage ||
-        data.message?.videoMessage ||
-        data.message?.audioMessage ||
-        data.message?.documentMessage ||
-        data.message?.stickerMessage
-      );
-      
-      if (hasMedia) {
-        this.logger.warn('Mensagem Evolution de mídia ignorada (não suportado ainda)', {
-          messageKeys: data.message ? Object.keys(data.message) : [],
-        });
-      } else {
-        this.logger.warn('Mensagem Evolution sem texto e sem mídia identificada, pulando...', {
-          messageKeys: data.message ? Object.keys(data.message) : [],
-          fullData: JSON.stringify(data.message, null, 2),
-        });
-      }
-      return;
-    }
+    this.logger.log(
+      `Conteúdo extraído da mensagem: ${
+        messageText ? `"${messageText.substring(0, 50)}"` : mediaPayload ? '[MÍDIA]' : 'NENHUM'
+      }`,
+      {
+        hasMessage: !!data.message,
+        messageKeys: data.message ? Object.keys(data.message) : [],
+        mediaType: mediaPayload?.type ?? null,
+      },
+    );
 
     // Buscar ou criar contato
     let contact = await this.prisma.contact.findUnique({
@@ -288,18 +283,41 @@ export class WebhooksService {
         }
       }
 
+    const supportsContent = Boolean(messageText) || Boolean(mediaPayload);
+    const hasSticker = Boolean(data.message?.stickerMessage);
+    const hasVideo = Boolean(data.message?.videoMessage);
+
+    if (!supportsContent) {
+      if (hasSticker || hasVideo) {
+        const unsupportedType = hasSticker ? 'STICKER' : 'VIDEO';
+        await this.createUnsupportedMediaNotice(conversation.id, unsupportedType);
+        this.logger.warn(`Mensagem Evolution de ${unsupportedType} recebida e registrada como aviso.`);
+      } else {
+        this.logger.warn('Mensagem Evolution sem texto e sem mídia suportada, pulando...', {
+          messageKeys: data.message ? Object.keys(data.message) : [],
+        });
+      }
+      return;
+    }
+
     // Criar mensagem
     const newMessage = await this.messagesService.receiveInbound({
       conversationId: conversation.id,
-      content: messageText,
+      content: messageText ?? mediaPayload?.caption ?? undefined,
       externalId: data.key?.id,
+      mediaType: mediaPayload?.type ?? null,
+      mediaUrl: mediaPayload?.url ?? null,
+      mediaMimeType: mediaPayload?.mimeType ?? null,
+      mediaFileName: mediaPayload?.fileName ?? null,
+      mediaCaption: mediaPayload?.caption ?? null,
+      mediaSize: mediaPayload?.size ?? null,
     });
 
     // Notificar via WebSocket
     this.logger.log(`Emitindo mensagem via WebSocket`, {
       conversationId: conversation.id,
       messageId: newMessage.id,
-      content: messageText.substring(0, 50),
+      content: (messageText ?? mediaPayload?.caption ?? '[conteúdo indisponível]').substring(0, 50),
     });
     this.chatGateway.emitNewMessage(conversation.id, newMessage);
 
@@ -361,7 +379,7 @@ export class WebhooksService {
     return null;
   }
 
-  private extractEvolutionMessageText(data: any): string | null {
+  private extractEvolutionMessageText(data: EvolutionWebhookDto['data']): string | null {
     if (data.message?.conversation) {
       return data.message.conversation;
     }
@@ -370,6 +388,84 @@ export class WebhooksService {
     }
     // TODO: Suportar outros tipos de mídia
     return null;
+  }
+
+  private extractEvolutionMediaPayload(
+    data: EvolutionWebhookDto['data'],
+    serviceInstance: any,
+  ): EvolutionMediaPayload | null {
+    const credentials = (serviceInstance.credentials as Record<string, any>) || {};
+
+    if (data.message?.imageMessage) {
+      const image = data.message.imageMessage;
+      return {
+        type: 'IMAGE',
+        url: this.buildEvolutionMediaUrl(image.url, credentials.serverUrl),
+        mimeType: image.mimetype || image.mimeType || 'image/jpeg',
+        fileName: image.fileName || `imagem-${data.key?.id ?? Date.now()}.jpg`,
+        caption: image.caption || image.captionMessage || null,
+        size: image.fileLength || image.fileSize || null,
+      };
+    }
+
+    if (data.message?.audioMessage) {
+      const audio = data.message.audioMessage;
+      return {
+        type: 'AUDIO',
+        url: this.buildEvolutionMediaUrl(audio.url, credentials.serverUrl),
+        mimeType: audio.mimetype || audio.mimeType || 'audio/mpeg',
+        fileName: audio.fileName || `audio-${data.key?.id ?? Date.now()}.mp3`,
+        caption: null,
+        size: audio.fileLength || audio.fileSize || null,
+      };
+    }
+
+    if (data.message?.documentMessage) {
+      const document = data.message.documentMessage;
+      return {
+        type: 'DOCUMENT',
+        url: this.buildEvolutionMediaUrl(document.url, credentials.serverUrl),
+        mimeType: document.mimetype || document.mimeType || 'application/octet-stream',
+        fileName: document.fileName || document.title || `documento-${data.key?.id ?? Date.now()}`,
+        caption: document.caption || null,
+        size: document.fileLength || document.fileSize || null,
+      };
+    }
+
+    return null;
+  }
+
+  private buildEvolutionMediaUrl(url: string, serverUrl?: string): string | null {
+    if (!url) {
+      return null;
+    }
+
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      return url;
+    }
+
+    if (!serverUrl) {
+      return null;
+    }
+
+    return `${serverUrl.replace(/\/$/, '')}/${url.replace(/^\//, '')}`;
+  }
+
+  private async createUnsupportedMediaNotice(
+    conversationId: string,
+    type: 'STICKER' | 'VIDEO',
+  ): Promise<void> {
+    const content =
+      type === 'STICKER'
+        ? 'Recebemos um sticker, mas esse tipo de mídia ainda não é suportado.'
+        : 'Recebemos um vídeo, mas esse tipo de mídia ainda não é suportado.';
+
+    const message = await this.messagesService.receiveInbound({
+      conversationId,
+      content,
+    });
+
+    this.chatGateway.emitNewMessage(conversationId, message);
   }
 
   private normalizePhone(phone: string): string {

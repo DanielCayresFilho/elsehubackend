@@ -158,6 +158,47 @@ Authorization: Bearer {accessToken}
 
 ---
 
+## 🖼️ Mídias Recebidas
+
+### Novos Campos da Mensagem
+
+Toda mensagem agora pode conter:
+
+```json
+{
+  "hasMedia": true,
+  "mediaType": "IMAGE", // IMAGE | AUDIO | DOCUMENT
+  "mediaFileName": "foto.jpg",
+  "mediaMimeType": "image/jpeg",
+  "mediaSize": 204800,
+  "mediaCaption": "Comprovante",
+  "mediaDownloadPath": "/api/messages/<id>/media"
+}
+```
+
+- Se `hasMedia = true`, use `mediaDownloadPath` para buscar o arquivo.
+- `content` terá um texto automático, ex.: `[Imagem recebida]`, caso não exista legenda.
+
+### Baixar Arquivo
+
+```typescript
+fetch(`/api/messages/${messageId}/media`, {
+  headers: { Authorization: `Bearer ${token}` },
+}).then(async (response) => {
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  // usar em <img>, <audio>, download, etc.
+});
+```
+
+### Tipos Não Suportados
+
+- Vídeos e stickers ainda não são processados.
+- Quando recebidos, aparecerá uma mensagem automática:
+  > "Recebemos um vídeo/sticker, mas esse tipo de mídia ainda não é suportado."
+
+---
+
 ## 🔄 Fluxo Completo
 
 ### 1. Usuário Envia Mensagem
@@ -269,6 +310,7 @@ socket.on('error', (error) => {
 3. **Enviar mensagens** via API REST ou WebSocket
 4. **Renovar token** antes de expirar (15 minutos)
 5. **Tratar erros** de token expirado
+6. **Renderizar mídias** usando `hasMedia` + `mediaDownloadPath`
 
 **Pronto!** Seu chat em tempo real está funcionando! 🎉
 

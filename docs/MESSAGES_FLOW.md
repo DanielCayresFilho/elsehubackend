@@ -78,12 +78,19 @@ async handleSendMessage(client: Socket, data: { conversationId, content }) {
 2. Evolution API recebe a mensagem
 3. Evolution API envia webhook para `POST /api/webhooks/evolution`
 4. Backend processa o webhook:
-   - Extrai telefone e texto da mensagem
+   - Extrai telefone e texto ou metadados de mídia (imagem/áudio/documento)
    - Busca ou cria contato
    - Busca ou cria conversa (com distribuição automática de operador)
    - Cria mensagem no banco com `direction: INBOUND`
    - Emite evento WebSocket `message:new`
 5. Frontend recebe a atualização em tempo real
+
+#### Download Seguro da Mídia
+
+- Endpoint: `GET /api/messages/:id/media`
+- Requer `Authorization: Bearer <token>`
+- Backend faz proxy do arquivo hospedado na Evolution API usando o `apikey`
+- Frontend sempre deve usar este endpoint (não usamos URLs públicas da Evolution)
 
 **Eventos da Evolution API**:
 - `messages.upsert`: Nova mensagem recebida
@@ -105,7 +112,13 @@ async processEvolutionMessage(payload) {
   // Criar mensagem
   const message = await this.messagesService.receiveInbound({
     conversationId: conversation.id,
-    content: messageText,
+    content: messageText ?? mediaCaption,
+    mediaType: media?.type,
+    mediaUrl: media?.url,
+    mediaMimeType: media?.mimeType,
+    mediaFileName: media?.fileName,
+    mediaCaption: media?.caption,
+    mediaSize: media?.size,
     externalId: data.key.id,
   });
   
@@ -189,7 +202,9 @@ Cada mensagem é salva com:
 - `id`: UUID único
 - `conversationId`: ID da conversa
 - `senderId`: ID do operador (null se for do cliente)
-- `content`: Texto da mensagem
+- `content`: Texto da mensagem (ou texto padrão `[Imagem recebida]`, etc.)
+- `mediaType`: `IMAGE`, `AUDIO`, `DOCUMENT` (opcional)
+- `mediaFileName`, `mediaMimeType`, `mediaSize`, `mediaCaption`, `mediaUrl`: metadados da mídia recebida
 - `direction`: `INBOUND` (recebida) ou `OUTBOUND` (enviada)
 - `via`: `INBOUND`, `CHAT_MANUAL`, ou `CAMPAIGN`
 - `externalId`: ID da mensagem na Evolution/Meta API

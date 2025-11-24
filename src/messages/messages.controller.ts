@@ -1,11 +1,5 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Body,
-  Param,
-  Query,
-} from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Query, Res } from '@nestjs/common';
+import type { Response } from 'express';
 
 import { MessagesService } from './messages.service';
 import { SendMessageDto } from './dto/send-message.dto';
@@ -41,6 +35,18 @@ export class MessagesController {
   @Roles(Role.ADMIN, Role.SUPERVISOR, Role.OPERATOR)
   findOne(@Param('id') id: string) {
     return this.messagesService.findOne(id);
+  }
+
+  @Get(':id/media')
+  @Roles(Role.ADMIN, Role.SUPERVISOR, Role.OPERATOR)
+  async downloadMedia(@Param('id') id: string, @Res() res: Response) {
+    const media = await this.messagesService.downloadMedia(id);
+    res.setHeader('Content-Type', media.mimeType);
+    res.setHeader('Content-Disposition', `inline; filename="${media.fileName}"`);
+    if (media.contentLength) {
+      res.setHeader('Content-Length', media.contentLength);
+    }
+    media.stream.pipe(res);
   }
 }
 
