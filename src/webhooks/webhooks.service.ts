@@ -404,7 +404,7 @@ export class WebhooksService {
         mimeType: image.mimetype || image.mimeType || 'image/jpeg',
         fileName: image.fileName || `imagem-${data.key?.id ?? Date.now()}.jpg`,
         caption: image.caption || image.captionMessage || null,
-        size: image.fileLength || image.fileSize || null,
+        size: this.normalizeMediaSize(image.fileLength ?? image.fileSize),
       };
     }
 
@@ -416,7 +416,7 @@ export class WebhooksService {
         mimeType: audio.mimetype || audio.mimeType || 'audio/mpeg',
         fileName: audio.fileName || `audio-${data.key?.id ?? Date.now()}.mp3`,
         caption: null,
-        size: audio.fileLength || audio.fileSize || null,
+        size: this.normalizeMediaSize(audio.fileLength ?? audio.fileSize),
       };
     }
 
@@ -428,7 +428,7 @@ export class WebhooksService {
         mimeType: document.mimetype || document.mimeType || 'application/octet-stream',
         fileName: document.fileName || document.title || `documento-${data.key?.id ?? Date.now()}`,
         caption: document.caption || null,
-        size: document.fileLength || document.fileSize || null,
+        size: this.normalizeMediaSize(document.fileLength ?? document.fileSize),
       };
     }
 
@@ -466,6 +466,42 @@ export class WebhooksService {
     });
 
     this.chatGateway.emitNewMessage(conversationId, message);
+  }
+
+  private normalizeMediaSize(value: any): number | null {
+    const MAX_INT32 = 2_147_483_647;
+
+    if (value === null || value === undefined) {
+      return null;
+    }
+
+    let numericValue: number | null = null;
+
+    if (typeof value === 'number') {
+      numericValue = value;
+    } else if (typeof value === 'string') {
+      const parsed = Number(value);
+      numericValue = Number.isFinite(parsed) ? parsed : null;
+    } else if (typeof value === 'object') {
+      const low = typeof value.low === 'number' ? value.low >>> 0 : 0;
+      const high = typeof value.high === 'number' ? value.high >>> 0 : 0;
+      const combined = high * 2 ** 32 + low;
+      numericValue = Number.isFinite(combined) ? combined : null;
+    }
+
+    if (numericValue === null) {
+      return null;
+    }
+
+    if (numericValue < 0) {
+      numericValue = 0;
+    }
+
+    if (numericValue > MAX_INT32) {
+      numericValue = MAX_INT32;
+    }
+
+    return Math.floor(numericValue);
   }
 
   private normalizePhone(phone: string): string {
