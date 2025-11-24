@@ -1,4 +1,9 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import axios from 'axios';
 import { ChatStatus, MessageDirection } from '@prisma/client';
 
@@ -498,9 +503,24 @@ export class WebhooksService {
       const response = await axios.get(mediaPayload.url, {
         responseType: 'arraybuffer',
         headers: credentials.apiToken ? { apikey: credentials.apiToken } : undefined,
+        validateStatus: (status) => status >= 200 && status < 300,
       });
 
+      const contentType =
+        (response.headers['content-type'] as string | undefined)?.toLowerCase() ?? '';
       const buffer = Buffer.from(response.data);
+
+      if (!this.isValidMediaContentType(mediaPayload.type, contentType)) {
+        const preview = buffer.toString('utf8', 0, 200);
+        this.logger.error('Conteúdo inválido ao baixar mídia da Evolution', {
+          requestedType: mediaPayload.type,
+          contentType,
+          status: response.status,
+          preview,
+        });
+        throw new BadRequestException('Falha ao baixar mídia da Evolution (tipo inválido)');
+      }
+
       const savedFile = await this.storageService.saveFile({
         buffer,
         originalName:
@@ -520,6 +540,37 @@ export class WebhooksService {
       });
       return null;
     }
+  }
+
+  private isValidMediaContentType(
+    mediaType: EvolutionSupportedMediaType,
+    contentType: string,
+  ): boolean {
+    if (!contentType) {
+      return false;
+    }
+
+    if (contentType.includes('text/html') || contentType.includes('application/json')) {
+      return false;
+    }
+
+    if (mediaType === 'IMAGE') {
+      return contentType.startsWith('image/');
+    }
+
+    if (mediaType === 'AUDIO') {
+      return contentType.startsWith('audio/');
+    }
+
+    if (mediaType === 'DOCUMENT') {
+      return (
+        contentType.startsWith('application/') ||
+        contentType.startsWith('text/plain') ||
+        contentType === 'application/octet-stream'
+      );
+    }
+
+    return false;
   }
 
   private normalizeMediaSize(value: any): number | null {
