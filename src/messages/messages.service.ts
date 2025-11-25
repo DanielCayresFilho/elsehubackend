@@ -311,21 +311,62 @@ export class MessagesService {
       throw new BadRequestException('Credenciais da Evolution API incompletas');
     }
 
-    const phone = conversation.contact.phone.replace(/[^\d+]/g, '');
+    // Normalizar telefone: remover caracteres não numéricos, mas manter o + se existir
+    // A Evolution API geralmente espera o formato internacional sem o +
+    let phone = conversation.contact.phone.replace(/[^\d+]/g, '');
+    // Se começar com +, remover para deixar apenas números
+    if (phone.startsWith('+')) {
+      phone = phone.substring(1);
+    }
+    
     const sendUrl = `${serverUrl.replace(/\/$/, '')}/message/sendText/${instanceName}`;
 
-    this.logger.log(`Enviando mensagem via Evolution API: ${sendUrl}`, {
+    // Verificar se a instância existe e está conectada (opcional, apenas para diagnóstico)
+    try {
+      const checkUrl = `${serverUrl.replace(/\/$/, '')}/instance/connect/${instanceName}`;
+      const checkResponse = await axios.get(checkUrl, {
+        headers: { apikey: apiToken },
+      });
+      
+      const instanceState = checkResponse.data?.instance?.state;
+      this.logger.log(`Status da instância verificado: ${instanceState}`, {
+        instanceName,
+        state: instanceState,
+      });
+      
+      if (instanceState !== 'open') {
+        this.logger.warn(`Instância '${instanceName}' não está conectada (state: ${instanceState})`, {
+          instanceName,
+          state: instanceState,
+        });
+      }
+    } catch (checkError: any) {
+      // Não bloquear o envio se a verificação falhar, apenas logar
+      this.logger.warn(`Não foi possível verificar o status da instância '${instanceName}'`, {
+        error: checkError.message,
+        instanceName,
+      });
+    }
+
+    this.logger.log(`Enviando mensagem via Evolution API`, {
+      url: sendUrl,
       phone,
       instanceName,
+      serverUrl,
+      messageLength: message.content?.length || 0,
     });
+
+    const payload = {
+      number: phone,
+      text: message.content,
+    };
+
+    this.logger.debug(`Payload de envio: ${JSON.stringify(payload)}`);
 
     try {
       const response = await axios.post(
         sendUrl,
-        {
-          number: phone,
-          text: message.content,
-        },
+        payload,
         {
           headers: {
             apikey: apiToken,
@@ -333,6 +374,8 @@ export class MessagesService {
           },
         },
       );
+
+      this.logger.log(`Resposta da Evolution API: ${JSON.stringify(response.data)}`);
 
       // A Evolution API retorna o ID da mensagem em key.id
       const externalId = response.data?.key?.id || response.data?.id || `evol_${Date.now()}`;
@@ -347,16 +390,36 @@ export class MessagesService {
         },
       });
 
-      this.logger.log(`Mensagem enviada com sucesso: ${externalId}`);
+      this.logger.log(`Mensagem enviada com sucesso: ${externalId}`, {
+        status,
+        externalId,
+      });
     } catch (error: any) {
       this.logger.error('Erro ao enviar mensagem na Evolution API', {
         error: error.message,
+        url: sendUrl,
+        payload,
         response: error.response?.data,
         status: error.response?.status,
+        statusText: error.response?.statusText,
+        headers: error.response?.headers,
       });
 
+      // Se for 404, pode ser que o endpoint esteja errado ou a instância não existe
+      if (error.response?.status === 404) {
+        const errorMessage = error.response?.data?.message || error.response?.data?.error || 'Endpoint não encontrado';
+        this.logger.error(`Erro 404 - Verifique se a instância '${instanceName}' existe na Evolution API`, {
+          instanceName,
+          serverUrl,
+          endpoint: sendUrl,
+        });
+        throw new BadRequestException(
+          `Instância '${instanceName}' não encontrada na Evolution API ou endpoint incorreto. Verifique se a instância existe e está conectada. Erro: ${errorMessage}`,
+        );
+      }
+
       throw new BadRequestException(
-        `Falha ao enviar mensagem na Evolution API: ${error.response?.data?.message || error.message}`,
+        `Falha ao enviar mensagem na Evolution API: ${error.response?.data?.message || error.response?.data?.error || error.message}`,
       );
     }
   }
