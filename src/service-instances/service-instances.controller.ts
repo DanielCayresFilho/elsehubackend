@@ -1,13 +1,14 @@
 import {
-  Controller,
-  Get,
-  Post,
   Body,
-  Patch,
-  Param,
+  Controller,
   Delete,
+  Get,
   HttpCode,
   HttpStatus,
+  Param,
+  Patch,
+  Post,
+  Query,
 } from '@nestjs/common';
 
 import { ServiceInstancesService } from './service-instances.service';
@@ -35,8 +36,9 @@ export class ServiceInstancesController {
 
   @Get()
   @Roles(Role.ADMIN, Role.SUPERVISOR)
-  findAll() {
-    return this.serviceInstancesService.findAll();
+  findAll(@Query('includeInactive') includeInactive?: string) {
+    const include = includeInactive === 'true';
+    return this.serviceInstancesService.findAll(include);
   }
 
   @Get(':id')

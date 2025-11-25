@@ -277,6 +277,20 @@ Quando recebemos **stickers** ou **vídeos**, criamos uma mensagem automática a
    ```
 3. Usa o header `apikey: {apiToken}`
 4. Atualiza a mensagem com o `externalId` retornado (geralmente `key.id`) e o status
+   - Se a instância for `OFFICIAL_META`, chama `POST https://graph.facebook.com/{version}/{phoneId}/messages` com:
+     ```json
+     {
+       "messaging_product": "whatsapp",
+       "to": "5514991484962",
+       "type": "text",
+       "text": {
+         "preview_url": false,
+         "body": "Conteúdo da mensagem"
+       }
+     }
+     ```
+   - Usa o header `Authorization: Bearer {accessToken}`
+   - Atualiza a mensagem com o `message.id` retornado e marca status `sent`
 5. Se houver erro, marca como `failed` e retorna erro
 
 **Response 201 Created**:
@@ -306,6 +320,7 @@ Quando recebemos **stickers** ou **vídeos**, criamos uma mensagem automática a
 - `400 Bad Request`: Não é possível enviar mensagem para conversa fechada
 - `400 Bad Request`: Instância de serviço inativa
 - `400 Bad Request`: Falha ao enviar mensagem na Evolution API (verifique credenciais e conexão)
+- `400 Bad Request`: Falha ao enviar mensagem na Meta API (credenciais inválidas, phoneId incorreto, número fora de sessão)
 - `401 Unauthorized`: Token de autenticação inválido ou ausente
 
 **Nota**: Se a Evolution API retornar erro (ex: instância desconectada, número inválido), a mensagem será marcada como `failed` e o erro será retornado ao frontend.

@@ -19,9 +19,11 @@ Este documento explica **como as mensagens funcionam** no sistema Elsehu, inclui
 
 **Fluxo**:
 1. Frontend faz `POST /api/messages/send` com `conversationId` e `content`
-2. Backend valida a conversa (deve existir e estar `OPEN`)
+2. Backend valida a conversa (deve existir, estar `OPEN` e a instância vinculada precisa estar `isActive = true`)
 3. Backend cria a mensagem no banco com status `pending`
-4. Backend envia a mensagem via Evolution API (`POST /message/sendText/{instanceName}`)
+4. Backend envia a mensagem:
+   - **Evolution**: `POST /message/sendText/{instanceName}` com header `apikey`
+   - **Meta**: `POST https://graph.facebook.com/{version}/{phoneId}/messages` com `Authorization: Bearer {accessToken}`
 5. Backend atualiza a mensagem com `externalId` e status `sent`
 6. **Backend emite evento WebSocket `message:new`** para todos os clientes na sala da conversa
 7. Frontend recebe a atualização em tempo real
@@ -30,16 +32,18 @@ Este documento explica **como as mensagens funcionam** no sistema Elsehu, inclui
 ```typescript
 // src/messages/messages.service.ts
 async send(userId: string, payload: SendMessageDto) {
-  // 1. Criar mensagem no banco
+  const conversation = await this.findConversation(payload.conversationId);
   const message = await this.prisma.message.create({...});
-  
-  // 2. Enviar via Evolution API
-  await this.sendViaEvolutionAPI(conversation, message);
-  
-  // 3. Emitir via WebSocket
-  this.chatGateway.emitNewMessage(conversationId, message);
-  
-  return message;
+
+  if (conversation.serviceInstance.provider === 'EVOLUTION_API') {
+    await this.sendViaEvolutionAPI(conversation, message);
+  } else {
+    await this.sendViaMetaAPI(conversation, message);
+  }
+
+  const updated = await this.prisma.message.findUnique({ where: { id: message.id } });
+  this.chatGateway.emitNewMessage(conversationId, this.toResponse(updated!));
+  return this.toResponse(updated!);
 }
 ```
 
@@ -89,7 +93,7 @@ async handleSendMessage(client: Socket, data: { conversationId, content }) {
 
 - Toda mídia inbound é baixada e salva em `storage/messages/<conversationId>/...`.
 - Se a Evolution estiver em modo “URL”, usamos o `imageMessage.url`.
-- Se estiver em modo **Base64**, o backend chama `POST /chat/getBase64FromMediaMessage/{instance}` passando `message.key.id`, decodifica o retorno e salva o arquivo local.
+- Se estiver em modo **Base64** (todas as instâncias Evolution são criadas com `webhook_base64: true`), o backend chama `POST /chat/getBase64FromMediaMessage/{instance}` passando `message.key.id`, decodifica o retorno e salva o arquivo local.
 - O arquivo fica exposto publicamente via `/media/messages/<conversationId>/<arquivo>` (campo `mediaPublicUrl`).
 - O endpoint `GET /api/messages/:id/media` continua disponível como **fallback autenticado** (usa o token e, se necessário, rebaixa da Evolution).
 - Retenção padrão: **3 dias** (configurável via `MEDIA_RETENTION_DAYS`). Depois disso `mediaPublicUrl` fica `null` e o frontend deve exibir “mídia expirada”.

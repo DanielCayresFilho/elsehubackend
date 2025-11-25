@@ -96,6 +96,7 @@ model ServiceInstance {
   id           String           @id @default(uuid())
   name         String
   provider     InstanceProvider
+  phone        String?
   
   // Dados Específicos (JSON para flexibilidade entre Meta/Evolution)
   // Meta: WABA ID, Phone ID, Token

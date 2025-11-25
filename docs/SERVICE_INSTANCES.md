@@ -27,6 +27,7 @@ O sistema suporta dois tipos de provedores:
 ```json
 {
   "name": "WhatsApp Vendas",
+  "phone": "5511999999999",
   "provider": "EVOLUTION_API",
   "credentials": {
     "serverUrl": "https://evolution.covenos.com.br",
@@ -38,6 +39,7 @@ O sistema suporta dois tipos de provedores:
 
 **Campos Obrigatórios**:
 - `name` (string): Nome descritivo da instância (ex: "WhatsApp Vendas", "Atendimento Principal")
+- `phone` (string): Número completo em formato internacional/E.164 (apenas dígitos, opcional `+`)
 - `provider` (enum): `EVOLUTION_API` ou `OFFICIAL_META`
 - `credentials` (object): Objeto com as credenciais específicas do provedor
 
@@ -64,6 +66,7 @@ O sistema suporta dois tipos de provedores:
 {
   "id": "uuid-da-instancia",
   "name": "WhatsApp Vendas",
+  "phone": "5511999999999",
   "provider": "EVOLUTION_API",
   "credentials": {
     "serverUrl": "https://evolution.covenos.com.br",
@@ -81,7 +84,7 @@ O sistema suporta dois tipos de provedores:
   1. Faz uma chamada POST para `{serverUrl}/instance/create` na Evolution API
   2. Envia o body: `{ "instanceName": "...", "integration": "WHATSAPP-BAILEYS", "qrcode": true }`
   3. Usa o header `apikey: {apiToken}`
-  4. **Configura o webhook automaticamente** para receber mensagens:
+  4. **Configura o webhook automaticamente** para receber mensagens (com `webhook_base64: true` para garantir mídias e áudios)
      - URL: `{APP_URL}/api/webhooks/evolution`
      - Eventos: `MESSAGES_UPSERT`, `MESSAGES_UPDATE`, `CONNECTION_UPDATE`
   5. Se a instância já existir na Evolution, o sistema continua normalmente (não é erro)
@@ -111,7 +114,7 @@ Se não configurar, o webhook não será configurado automaticamente e você pre
 
 **Roles**: `ADMIN`, `SUPERVISOR`
 
-**Descrição**: Retorna todas as instâncias cadastradas no sistema, ordenadas por data de criação (mais recentes primeiro).
+**Descrição**: Retorna todas as instâncias **ativas** cadastradas no sistema, ordenadas por data de criação (mais recentes primeiro). Para incluir instâncias desativadas utilize `GET /api/service-instances?includeInactive=true`.
 
 **Response 200 OK**:
 ```json
@@ -119,6 +122,7 @@ Se não configurar, o webhook não será configurado automaticamente e você pre
   {
     "id": "uuid-1",
     "name": "WhatsApp Vendas",
+    "phone": "5511999999999",
     "provider": "EVOLUTION_API",
     "credentials": {
       "serverUrl": "https://evolution.covenos.com.br",
@@ -132,6 +136,7 @@ Se não configurar, o webhook não será configurado automaticamente e você pre
   {
     "id": "uuid-2",
     "name": "Atendimento Principal",
+    "phone": "5514888888888",
     "provider": "OFFICIAL_META",
     "credentials": {
       "wabaId": "123456789",
@@ -166,6 +171,7 @@ Se não configurar, o webhook não será configurado automaticamente e você pre
 {
   "id": "uuid-da-instancia",
   "name": "WhatsApp Vendas",
+  "phone": "5511999999999",
   "provider": "EVOLUTION_API",
   "credentials": {
     "serverUrl": "https://evolution.covenos.com.br",
@@ -249,6 +255,7 @@ Se não configurar, o webhook não será configurado automaticamente e você pre
 ```json
 {
   "name": "Novo Nome",
+  "phone": "5511991112222",
   "provider": "EVOLUTION_API",
   "credentials": {
     "serverUrl": "https://evolution.covenos.com.br",
@@ -269,6 +276,7 @@ Se não configurar, o webhook não será configurado automaticamente e você pre
 {
   "id": "uuid-da-instancia",
   "name": "Novo Nome",
+  "phone": "5511991112222",
   "provider": "EVOLUTION_API",
   "credentials": {
     "serverUrl": "https://evolution.covenos.com.br",
@@ -290,22 +298,21 @@ Se não configurar, o webhook não será configurado automaticamente e você pre
 
 ---
 
-### 6. Deletar Instância
+### 6. Desativar Instância
 
 **DELETE** `/api/service-instances/:id`
 
 **Roles**: `ADMIN`
 
-**Descrição**: Remove uma instância do banco de dados. A instância só pode ser removida se não tiver conversas ou campanhas associadas.
+**Descrição**: Marca uma instância como inativa (`isActive = false`). Os registros permanecem no banco para manter o histórico de conversas/campanhas.
 
 **Parâmetros de URL**:
 - `id` (string, UUID): ID da instância
 
-**Response 204 No Content**: Sem corpo de resposta.
+**Response 204 No Content**: Sem corpo de resposta (mesmo se a instância já estiver inativa).
 
 **Erros Possíveis**:
 - `404 Not Found`: Instância não encontrada
-- `400 Bad Request`: Não é possível remover uma instância com conversas ou campanhas associadas
 - `401 Unauthorized`: Token de autenticação inválido ou ausente
 
 **Nota**: A deleção **não** remove a instância da Evolution API. Se você quiser remover também da Evolution, precisa fazer isso manualmente através da API da Evolution ou do manager.
@@ -380,13 +387,11 @@ Authorization: Bearer {token}
 - `phoneId`: Obrigatório, string não vazia
 - `accessToken`: Obrigatório, string não vazia
 
-### Regras de Deleção
+### Regras de Desativação
 
-Uma instância **não pode ser deletada** se:
-- Tiver conversas associadas (`conversations.length > 0`)
-- Tiver campanhas associadas (`campanhas.length > 0`)
-
-Nesses casos, o sistema retorna erro `400 Bad Request` com a mensagem: "Não é possível remover uma instância com conversas ou campanhas associadas".
+- `DELETE /api/service-instances/:id` apenas seta `isActive = false`.
+- Conversas e campanhas existentes continuam associados ao registro (as mensagens enviadas/recebidas já referenciam a instância via conversa).
+- Para listar novamente uma instância desativada use `?includeInactive=true` e reative-a via `PATCH ... { "isActive": true }`.
 
 ### Integração com Evolution API
 

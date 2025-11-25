@@ -3,6 +3,7 @@ import { InstanceProvider } from '@prisma/client';
 export class ServiceInstanceResponseDto {
   id: string;
   name: string;
+  phone: string | null;
   provider: InstanceProvider;
   credentials: Record<string, any>;
   isActive: boolean;

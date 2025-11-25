@@ -6,6 +6,10 @@ export class UpdateServiceInstanceDto {
   @IsOptional()
   name?: string;
 
+  @IsString()
+  @IsOptional()
+  phone?: string;
+
   @IsEnum(InstanceProvider)
   @IsOptional()
   provider?: InstanceProvider;

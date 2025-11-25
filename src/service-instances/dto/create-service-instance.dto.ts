@@ -6,6 +6,10 @@ export class CreateServiceInstanceDto {
   @IsNotEmpty()
   name: string;
 
+  @IsString()
+  @IsNotEmpty()
+  phone: string;
+
   @IsEnum(InstanceProvider)
   provider: InstanceProvider;
 

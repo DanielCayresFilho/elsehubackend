@@ -80,6 +80,7 @@ export class ServiceInstancesService {
     const instance = await this.prisma.serviceInstance.create({
       data: {
         name: payload.name.trim(),
+        phone: payload.phone.trim(),
         provider: payload.provider,
         credentials: payload.credentials,
       },
@@ -184,7 +185,7 @@ export class ServiceInstancesService {
         url: webhookUrl,
         enabled: true,
         webhook_by_events: true,
-        webhook_base64: false,
+        webhook_base64: true,
         events: [
           'MESSAGES_UPSERT',    // Mensagens recebidas/enviadas
           'MESSAGES_UPDATE',     // Atualização de status (sent, delivered, read)
@@ -229,7 +230,7 @@ export class ServiceInstancesService {
               url: webhookUrl,
               enabled: true,
               webhook_by_events: true,
-              webhook_base64: false,
+              webhook_base64: true,
               events: [
                 'MESSAGES_UPSERT',
                 'MESSAGES_UPDATE',
@@ -267,8 +268,13 @@ export class ServiceInstancesService {
     }
   }
 
-  async findAll() {
+  async findAll(includeInactive = false) {
     const instances = await this.prisma.serviceInstance.findMany({
+      where: includeInactive
+        ? undefined
+        : {
+            isActive: true,
+          },
       orderBy: { createdAt: 'desc' },
     });
 
@@ -309,6 +315,7 @@ export class ServiceInstancesService {
       where: { id },
       data: {
         name: payload.name?.trim(),
+        phone: payload.phone?.trim(),
         provider: payload.provider,
         credentials: payload.credentials,
         isActive: payload.isActive,
@@ -321,23 +328,20 @@ export class ServiceInstancesService {
   async remove(id: string): Promise<void> {
     const instance = await this.prisma.serviceInstance.findUnique({
       where: { id },
-      include: {
-        conversations: true,
-        campaigns: true,
-      },
     });
 
     if (!instance) {
       throw new NotFoundException('Instância não encontrada');
     }
 
-    if (instance.conversations.length > 0 || instance.campaigns.length > 0) {
-      throw new BadRequestException(
-        'Não é possível remover uma instância com conversas ou campanhas associadas',
-      );
+    if (!instance.isActive) {
+      return;
     }
 
-    await this.prisma.serviceInstance.delete({ where: { id } });
+    await this.prisma.serviceInstance.update({
+      where: { id },
+      data: { isActive: false },
+    });
   }
 
   private validateCredentials(
@@ -371,6 +375,7 @@ export class ServiceInstancesService {
     return {
       id: instance.id,
       name: instance.name,
+      phone: instance.phone ?? null,
       provider: instance.provider,
       credentials: instance.credentials as Record<string, any>,
       isActive: instance.isActive,

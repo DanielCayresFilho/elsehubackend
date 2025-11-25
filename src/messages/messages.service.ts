@@ -50,6 +50,10 @@ export class MessagesService {
       throw new BadRequestException('Não é possível enviar mensagem para conversa fechada');
     }
 
+    if (!conversation.serviceInstance || !conversation.serviceInstance.isActive) {
+      throw new BadRequestException('Instância de serviço inativa');
+    }
+
     const message = await this.prisma.message.create({
       data: {
         conversationId: payload.conversationId,
@@ -69,15 +73,7 @@ export class MessagesService {
       if (conversation.serviceInstance.provider === 'EVOLUTION_API') {
         await this.sendViaEvolutionAPI(conversation, message);
       } else if (conversation.serviceInstance.provider === 'OFFICIAL_META') {
-        // TODO: Implementar envio via Meta API
-        this.logger.warn('Envio via Meta API ainda não implementado');
-        await this.prisma.message.update({
-          where: { id: message.id },
-          data: {
-            status: 'sent',
-            externalId: `meta_${Date.now()}`,
-          },
-        });
+        await this.sendViaMetaAPI(conversation, message);
       } else {
         throw new BadRequestException('Provedor não suportado');
       }
@@ -311,13 +307,7 @@ export class MessagesService {
       throw new BadRequestException('Credenciais da Evolution API incompletas');
     }
 
-    // Normalizar telefone: remover caracteres não numéricos, mas manter o + se existir
-    // A Evolution API geralmente espera o formato internacional sem o +
-    let phone = conversation.contact.phone.replace(/[^\d+]/g, '');
-    // Se começar com +, remover para deixar apenas números
-    if (phone.startsWith('+')) {
-      phone = phone.substring(1);
-    }
+    const phone = this.normalizePhoneNumber(conversation.contact.phone);
     
     const sendUrl = `${serverUrl.replace(/\/$/, '')}/message/sendText/${instanceName}`;
 
@@ -480,6 +470,113 @@ export class MessagesService {
     }
 
     return `${serverUrl.replace(/\/$/, '')}/${url.replace(/^\//, '')}`;
+  }
+
+  private normalizePhoneNumber(rawPhone: string | null | undefined): string {
+    if (!rawPhone) {
+      throw new BadRequestException('Contato sem telefone válido');
+    }
+
+    let phone = rawPhone.replace(/[^\d+]/g, '');
+    if (phone.startsWith('+')) {
+      phone = phone.substring(1);
+    }
+
+    if (!phone) {
+      throw new BadRequestException('Telefone do contato inválido');
+    }
+
+    return phone;
+  }
+
+  private getMetaGraphConfig(credentials: Record<string, any>) {
+    const version =
+      credentials.apiVersion ||
+      process.env.META_GRAPH_API_VERSION ||
+      'v18.0';
+    const baseUrl =
+      credentials.graphApiUrl ||
+      process.env.META_GRAPH_API_BASE_URL ||
+      'https://graph.facebook.com';
+
+    return {
+      version: version.replace(/^\//, '').replace(/\/$/, ''),
+      baseUrl: baseUrl.replace(/\/$/, ''),
+    };
+  }
+
+  private async sendViaMetaAPI(conversation: any, message: Message): Promise<void> {
+    const credentials = conversation.serviceInstance.credentials as Record<string, any>;
+    const { phoneId, accessToken } = credentials;
+
+    if (!phoneId || !accessToken) {
+      throw new BadRequestException('Credenciais da Meta incompletas');
+    }
+
+    const phone = this.normalizePhoneNumber(conversation.contact.phone);
+    const { version, baseUrl } = this.getMetaGraphConfig(credentials);
+    const sendUrl = `${baseUrl}/${version}/${phoneId}/messages`;
+
+    this.logger.log(`Enviando mensagem via Meta WhatsApp API`, {
+      phoneId,
+      sendUrl,
+      conversationId: conversation.id,
+      messageLength: message.content?.length || 0,
+    });
+
+    const payload = {
+      messaging_product: 'whatsapp',
+      to: phone,
+      type: 'text',
+      text: {
+        preview_url: false,
+        body: message.content,
+      },
+    };
+
+    try {
+      const response = await axios.post(sendUrl, payload, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const externalId =
+        response.data?.messages?.[0]?.id ||
+        response.data?.message_id ||
+        `meta_${Date.now()}`;
+
+      await this.prisma.message.update({
+        where: { id: message.id },
+        data: {
+          status: 'sent',
+          externalId,
+        },
+      });
+
+      this.logger.log(`Mensagem enviada via Meta API com sucesso`, {
+        externalId,
+        phoneId,
+      });
+    } catch (error: any) {
+      this.logger.error('Erro ao enviar mensagem na Meta API', {
+        error: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+        sendUrl,
+        payload,
+      });
+
+      const errorMessage =
+        error.response?.data?.error?.message ||
+        error.response?.data?.message ||
+        error.message;
+
+      throw new BadRequestException(
+        `Falha ao enviar mensagem na Meta API: ${errorMessage}`,
+      );
+    }
   }
 }
 
