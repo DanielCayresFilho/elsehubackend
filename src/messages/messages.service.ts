@@ -34,6 +34,12 @@ export class MessagesService {
     userId: string,
     payload: SendMessageDto,
   ): Promise<MessageResponseDto> {
+    this.logger.log(`Tentando enviar mensagem`, {
+      userId,
+      conversationId: payload.conversationId,
+      contentLength: payload.content?.length || 0,
+    });
+
     const conversation = await this.prisma.conversation.findUnique({
       where: { id: payload.conversationId },
       include: {
@@ -43,14 +49,41 @@ export class MessagesService {
     });
 
     if (!conversation) {
+      this.logger.error(`Conversa não encontrada: ${payload.conversationId}`);
       throw new NotFoundException('Conversa não encontrada');
     }
 
+    this.logger.log(`Conversa encontrada`, {
+      conversationId: conversation.id,
+      status: conversation.status,
+      serviceInstanceId: conversation.serviceInstanceId,
+      serviceInstanceName: conversation.serviceInstance?.name,
+      serviceInstanceActive: conversation.serviceInstance?.isActive,
+      provider: conversation.serviceInstance?.provider,
+    });
+
     if (conversation.status !== ChatStatus.OPEN) {
+      this.logger.warn(`Tentativa de enviar mensagem para conversa fechada`, {
+        conversationId: conversation.id,
+        status: conversation.status,
+      });
       throw new BadRequestException('Não é possível enviar mensagem para conversa fechada');
     }
 
-    if (!conversation.serviceInstance || !conversation.serviceInstance.isActive) {
+    if (!conversation.serviceInstance) {
+      this.logger.error(`Conversa sem instância de serviço vinculada`, {
+        conversationId: conversation.id,
+        serviceInstanceId: conversation.serviceInstanceId,
+      });
+      throw new BadRequestException('Conversa não possui instância de serviço vinculada');
+    }
+
+    if (!conversation.serviceInstance.isActive) {
+      this.logger.warn(`Tentativa de enviar mensagem via instância inativa`, {
+        conversationId: conversation.id,
+        serviceInstanceId: conversation.serviceInstance.id,
+        serviceInstanceName: conversation.serviceInstance.name,
+      });
       throw new BadRequestException('Instância de serviço inativa');
     }
 

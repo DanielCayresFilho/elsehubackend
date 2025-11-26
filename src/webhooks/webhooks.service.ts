@@ -123,6 +123,7 @@ export class WebhooksService {
         },
       });
 
+      let isNewConversation = false;
       if (!conversation) {
         // Buscar operador online há mais tempo sem receber conversa
         const availableOperator = await this.findAvailableOperator();
@@ -135,6 +136,8 @@ export class WebhooksService {
             status: ChatStatus.OPEN,
           },
         });
+
+        isNewConversation = true;
 
         // Atualizar timestamp do operador
         if (availableOperator) {
@@ -162,6 +165,16 @@ export class WebhooksService {
 
       // Notificar via WebSocket
       this.chatGateway.emitNewMessage(conversation.id, newMessage);
+
+      // Se for uma nova conversa, notificar o frontend com os dados completos
+      if (isNewConversation) {
+        const fullConversation = await this.conversationsService.findOne(conversation.id);
+        this.chatGateway.emitNewConversation(fullConversation);
+        this.logger.log(`Nova conversa criada e notificada: ${conversation.id}`, {
+          serviceInstanceId: fullConversation.serviceInstanceId,
+          serviceInstanceName: fullConversation.serviceInstanceName,
+        });
+      }
 
       this.logger.log(`Mensagem Meta processada: ${message.id}`);
     }
@@ -261,6 +274,7 @@ export class WebhooksService {
         },
       });
 
+      let isNewConversation = false;
       if (!conversation) {
         // Buscar operador online há mais tempo sem receber conversa
         const availableOperator = await this.findAvailableOperator();
@@ -273,6 +287,8 @@ export class WebhooksService {
             status: ChatStatus.OPEN,
           },
         });
+
+        isNewConversation = true;
 
         // Atualizar timestamp do operador
         if (availableOperator) {
@@ -341,6 +357,16 @@ export class WebhooksService {
       content: (messageText ?? mediaPayload?.caption ?? '[conteúdo indisponível]').substring(0, 50),
     });
     this.chatGateway.emitNewMessage(conversation.id, newMessage);
+
+    // Se for uma nova conversa, notificar o frontend com os dados completos
+    if (isNewConversation) {
+      const fullConversation = await this.conversationsService.findOne(conversation.id);
+      this.chatGateway.emitNewConversation(fullConversation);
+      this.logger.log(`Nova conversa Evolution criada e notificada: ${conversation.id}`, {
+        serviceInstanceId: fullConversation.serviceInstanceId,
+        serviceInstanceName: fullConversation.serviceInstanceName,
+      });
+    }
 
     this.logger.log(`Mensagem Evolution processada com sucesso: ${data.key?.id}`);
   }

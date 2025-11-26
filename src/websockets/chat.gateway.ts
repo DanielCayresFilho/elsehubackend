@@ -208,6 +208,15 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       .emit('conversation:closed', { conversationId });
   }
 
+  emitNewConversation(conversation: any) {
+    // Emitir para todos os clientes conectados (para atualizar lista de conversas)
+    this.server.emit('conversation:new', conversation);
+    // Também emitir para a sala específica da conversa
+    this.server
+      .to(`conversation:${conversation.id}`)
+      .emit('conversation:updated', conversation);
+  }
+
   private extractToken(client: Socket): string | null {
     // 1. Tentar via auth object (Socket.IO padrão)
     if (client.handshake.auth?.token) {
