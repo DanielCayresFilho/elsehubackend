@@ -50,7 +50,7 @@ async send(userId: string, payload: SendMessageDto) {
 #### Via WebSocket (`message:send`)
 
 **Fluxo**:
-1. Cliente conecta via WebSocket (`ws://api.elsehub.com/chat`)
+1. Cliente conecta via WebSocket (`ws://api.elsehub.covenos.com.br/chat`)
 2. Cliente entra na sala da conversa (`conversation:join`)
 3. Cliente envia evento `message:send` com `conversationId` e `content`
 4. Backend processa igual ao REST (cria, envia, atualiza)
@@ -158,7 +158,7 @@ async processMetaMessages(value) {
 
 #### Conexão
 
-**URL**: `ws://api.elsehub.com/chat` ou `wss://api.elsehub.com/chat`
+**URL**: `ws://api.elsehub.covenos.com.br/chat` ou `wss://api.elsehub.covenos.com.br/chat`
 
 **Autenticação**: Token JWT via:
 - Header: `Authorization: Bearer <token>`
@@ -183,7 +183,7 @@ async processMetaMessages(value) {
 
 ```javascript
 // Conectar
-const socket = io('wss://api.elsehub.com/chat', {
+const socket = io('wss://api.elsehub.covenos.com.br/chat', {
   auth: { token: 'seu-jwt-token' }
 });
 
@@ -333,9 +333,9 @@ if (data.key?.fromMe) {
 **Variável de Ambiente Necessária**:
 ```bash
 # Defina uma dessas variáveis:
-APP_URL=https://api.elsehub.com
+APP_URL=https://api.elsehub.covenos.com.br
 # OU
-WEBHOOK_URL=https://api.elsehub.com/api/webhooks/evolution
+WEBHOOK_URL=https://api.elsehub.covenos.com.br/api/webhooks/evolution
 ```
 
 **Se não configurar a variável de ambiente**:
@@ -344,7 +344,7 @@ WEBHOOK_URL=https://api.elsehub.com/api/webhooks/evolution
 
 **Configuração Manual (se necessário)**:
 1. Acessar o Manager da Evolution API
-2. Configurar webhook para: `https://api.elsehub.com/api/webhooks/evolution`
+2. Configurar webhook para: `https://api.elsehub.covenos.com.br/api/webhooks/evolution`
 3. Eventos: `MESSAGES_UPSERT`, `MESSAGES_UPDATE`, `CONNECTION_UPDATE`
 
 **Payload Esperado**:
@@ -372,7 +372,7 @@ WEBHOOK_URL=https://api.elsehub.com/api/webhooks/evolution
 
 **Configuração na Meta**:
 1. Acessar Meta for Developers
-2. Configurar webhook para: `https://api.elsehub.com/api/webhooks/meta`
+2. Configurar webhook para: `https://api.elsehub.covenos.com.br/api/webhooks/meta`
 3. Eventos: `messages`, `message_status`
 
 **Verificação**: `GET /api/webhooks/meta?hub.mode=subscribe&hub.verify_token=elsehu_verify_token&hub.challenge=123`

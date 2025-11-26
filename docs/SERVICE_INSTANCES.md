@@ -94,9 +94,9 @@ O sistema suporta dois tipos de provedores:
 **⚠️ IMPORTANTE - Variável de Ambiente para Webhook**:
 Para que o webhook seja configurado automaticamente, você precisa definir uma dessas variáveis de ambiente:
 ```bash
-APP_URL=https://api.elsehub.com
+APP_URL=https://api.elsehub.covenos.com.br
 # OU
-WEBHOOK_URL=https://api.elsehub.com/api/webhooks/evolution
+WEBHOOK_URL=https://api.elsehub.covenos.com.br/api/webhooks/evolution
 ```
 
 Se não configurar, o webhook não será configurado automaticamente e você precisará configurar manualmente na Evolution API.
@@ -536,9 +536,9 @@ Quando você cria uma instância Evolution API, o sistema **automaticamente conf
 **Variável de Ambiente Necessária**:
 ```bash
 # Defina uma dessas variáveis no seu .env ou ambiente de produção:
-APP_URL=https://api.elsehub.com
+APP_URL=https://api.elsehub.covenos.com.br
 # OU
-WEBHOOK_URL=https://api.elsehub.com/api/webhooks/evolution
+WEBHOOK_URL=https://api.elsehub.covenos.com.br/api/webhooks/evolution
 ```
 
 **Se não configurar a variável**:
@@ -557,7 +557,7 @@ Se o webhook não foi configurado automaticamente, você pode configurar manualm
 1. **Via Manager da Evolution API**:
    - Acesse o Manager da sua Evolution API
    - Vá em "Webhooks" ou "Configurações"
-   - Configure a URL: `https://api.elsehub.com/api/webhooks/evolution`
+   - Configure a URL: `https://api.elsehub.covenos.com.br/api/webhooks/evolution`
    - Selecione os eventos: `MESSAGES_UPSERT`, `MESSAGES_UPDATE`, `CONNECTION_UPDATE`
 
 2. **Via API da Evolution**:
@@ -566,7 +566,7 @@ Se o webhook não foi configurado automaticamente, você pode configurar manualm
      -H "apikey: {apiToken}" \
      -H "Content-Type: application/json" \
      -d '{
-       "url": "https://api.elsehub.com/api/webhooks/evolution",
+       "url": "https://api.elsehub.covenos.com.br/api/webhooks/evolution",
        "webhook_by_events": true,
        "events": ["MESSAGES_UPSERT", "MESSAGES_UPDATE", "CONNECTION_UPDATE"]
      }'

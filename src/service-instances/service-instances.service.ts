@@ -18,7 +18,7 @@ export class ServiceInstancesService {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  async getQrCode(id: string): Promise<{ base64?: string; pairingCode?: string; message?: string }> {
+  async getQrCode(id: string): Promise<{ qrcode?: string; base64?: string; pairingCode?: string; message?: string; instanceName?: string }> {
     const instance = await this.prisma.serviceInstance.findUnique({
       where: { id },
     });
@@ -51,14 +51,28 @@ export class ServiceInstancesService {
 
       // A Evolution retorna: { instance: { ... }, base64: "..." } ou { code: "..." }
       if (response.data?.base64) {
-        return { base64: response.data.base64 };
+        const base64 = response.data.base64;
+        return {
+          qrcode: `data:image/png;base64,${base64}`,
+          base64,
+          instanceName,
+        };
       } else if (response.data?.code) {
-        return { pairingCode: response.data.code };
+        return {
+          pairingCode: response.data.code,
+          instanceName,
+        };
       } else if (response.data?.instance?.state === 'open') {
-         return { message: 'Instância já conectada' };
+         return {
+           message: 'Instância já conectada',
+           instanceName,
+         };
       }
 
-      return response.data;
+      return {
+        ...response.data,
+        instanceName,
+      };
     } catch (error) {
       this.logger.error('Erro ao buscar QR Code na Evolution API', error);
       throw new BadRequestException('Falha ao comunicar com a Evolution API: ' + (error.response?.data?.message || error.message));

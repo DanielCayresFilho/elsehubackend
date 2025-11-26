@@ -1,4 +1,5 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Controller, Get, Query, Res } from '@nestjs/common';
+import type { Response } from 'express';
 
 import { ReportsService } from './reports.service';
 import { ReportQueryDto } from './dto/report-query.dto';
@@ -17,8 +18,17 @@ export class ReportsController {
 
   @Get('finished-conversations/export')
   @Roles(Role.ADMIN, Role.SUPERVISOR)
-  exportFinishedConversations(@Query() query: ReportQueryDto) {
-    return this.reportsService.exportFinishedConversationsCsv(query);
+  async exportFinishedConversations(
+    @Query() query: ReportQueryDto,
+    @Res() res: Response,
+  ) {
+    const csvContent = await this.reportsService.exportFinishedConversationsCsv(query);
+    const timestamp = new Date().toISOString().split('T')[0];
+    const filename = `conversas-finalizadas-${timestamp}.csv`;
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(csvContent);
   }
 
   @Get('statistics')

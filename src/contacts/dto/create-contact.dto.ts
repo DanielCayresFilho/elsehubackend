@@ -1,6 +1,7 @@
 import { IsOptional, IsString, Matches, MaxLength } from 'class-validator';
 
-const PHONE_REGEX = /^\+?[0-9]{10,15}$/;
+// Formato E.164 estrito: + seguido de 1-9 e depois 10-14 dígitos
+const PHONE_REGEX = /^\+[1-9]\d{10,14}$/;
 
 export class CreateContactDto {
   @IsString()

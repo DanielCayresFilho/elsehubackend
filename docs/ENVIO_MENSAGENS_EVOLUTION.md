@@ -343,7 +343,7 @@ async function sendMessage(
   content: string,
   token: string
 ): Promise<MessageResponse> {
-  const response = await fetch('https://api.elsehub.com/api/messages/send', {
+  const response = await fetch('https://api.elsehub.covenos.com.br/api/messages/send', {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${token}`,
@@ -410,7 +410,7 @@ const MessageForm: React.FC<MessageFormProps> = ({ conversationId, onMessageSent
 
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('https://api.elsehub.com/api/messages/send', {
+      const response = await fetch('https://api.elsehub.covenos.com.br/api/messages/send', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -469,7 +469,7 @@ export default MessageForm;
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: 'https://api.elsehub.com',
+  baseURL: 'https://api.elsehub.covenos.com.br',
 });
 
 // Interceptor para adicionar token

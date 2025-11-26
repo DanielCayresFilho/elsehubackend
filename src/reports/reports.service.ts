@@ -48,7 +48,7 @@ export class ReportsService {
 
   async exportFinishedConversationsCsv(
     query: ReportQueryDto,
-  ): Promise<{ filePath: string; filename: string }> {
+  ): Promise<string> {
     const conversations = await this.getFinishedConversations(query);
 
     const csvStringifier = createObjectCsvStringifier({
@@ -69,19 +69,7 @@ export class ReportsService {
       csvStringifier.getHeaderString() +
       csvStringifier.stringifyRecords(conversations);
 
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const filename = `relatorio-atendimentos-${timestamp}.csv`;
-
-    const savedFile = await this.storageService.saveFile({
-      buffer: Buffer.from(csvContent, 'utf-8'),
-      originalName: filename,
-      subdirectory: 'reports',
-    });
-
-    return {
-      filePath: savedFile.relativePath,
-      filename: savedFile.filename,
-    };
+    return csvContent;
   }
 
   async getStatistics(query: ReportQueryDto) {
