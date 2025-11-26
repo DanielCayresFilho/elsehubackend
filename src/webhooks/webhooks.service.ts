@@ -244,26 +244,24 @@ export class WebhooksService {
       return;
     }
 
-    // Alertar sobre mensagens com @lid - esse formato indica um problema na Evolution API
-    // O número pode não funcionar para enviar mensagens de volta
-    if (data.key?.remoteJid?.endsWith('@lid')) {
-      this.logger.error(
-        `❌ ERRO CRÍTICO: Mensagem recebida com formato @lid. O número pode estar incorreto e não será possível responder.`,
+    // Se o remoteJid termina com @lid, usar remoteJidAlt que contém o número correto
+    let phoneToUse = data.key?.remoteJid || '';
+    if (phoneToUse.endsWith('@lid') && data.key?.remoteJidAlt) {
+      this.logger.log(
+        `✅ Usando remoteJidAlt para número correto (remoteJid tinha @lid)`,
         {
           remoteJid: data.key?.remoteJid,
+          remoteJidAlt: data.key?.remoteJidAlt,
           instance,
-          pushName: data.pushName,
-          messageId: data.key?.id,
-          message: 'A Evolution API está enviando o número em formato @lid. Isso pode causar problemas ao tentar enviar mensagens de volta. Verifique a configuração da Evolution API e o número do contato.',
         },
       );
-      // Continuar processando a mensagem para que seja recebida, mas o número pode estar incorreto
+      phoneToUse = data.key.remoteJidAlt;
     }
 
-    // Remover qualquer sufixo após @ (ex: @s.whatsapp.net, @g.us, etc)
-    const rawPhone = data.key?.remoteJid?.split('@')[0] || '';
+    // Remover qualquer sufixo após @ (ex: @s.whatsapp.net, @lid, @g.us, etc)
+    const rawPhone = phoneToUse.split('@')[0] || '';
     const contactPhone = this.normalizePhone(rawPhone);
-    const remoteJidSuffix = data.key?.remoteJid?.split('@')[1] || '';
+    const remoteJidSuffix = phoneToUse.split('@')[1] || '';
     
     // Log de alerta se o número parece incorreto ou vem com sufixo diferente de @s.whatsapp.net
     if (remoteJidSuffix && remoteJidSuffix !== 's.whatsapp.net') {

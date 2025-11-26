@@ -35,8 +35,11 @@ export class EvolutionWebhookDto {
 export interface EvolutionWebhookData {
   key?: {
     remoteJid: string;
+    remoteJidAlt?: string; // Número alternativo quando remoteJid vem com @lid
     fromMe: boolean;
     id: string;
+    participant?: string;
+    addressingMode?: string;
   };
   message?: {
     conversation?: string;
