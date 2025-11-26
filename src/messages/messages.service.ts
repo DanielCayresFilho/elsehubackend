@@ -377,7 +377,28 @@ export class MessagesService {
       instanceName,
       serverUrl,
       messageLength: message.content?.length || 0,
+      conversationId: conversation.id,
+      contactPhone: conversation.contact.phone,
     });
+
+    // Validar se o telefone está no formato correto (apenas números, sem +)
+    if (!/^\d+$/.test(phone)) {
+      this.logger.error(`Formato de telefone inválido: ${phone}`, {
+        original: conversation.contact.phone,
+        normalized: phone,
+      });
+      throw new BadRequestException(`Formato de telefone inválido: ${phone}. Deve conter apenas números.`);
+    }
+
+    // Validar se o telefone tem pelo menos 10 dígitos (formato mínimo internacional)
+    if (phone.length < 10) {
+      this.logger.error(`Telefone muito curto: ${phone}`, {
+        original: conversation.contact.phone,
+        normalized: phone,
+        length: phone.length,
+      });
+      throw new BadRequestException(`Telefone muito curto: ${phone}. Deve ter pelo menos 10 dígitos.`);
+    }
 
     const payload = {
       number: phone,
@@ -387,6 +408,14 @@ export class MessagesService {
     this.logger.debug(`Payload de envio: ${JSON.stringify(payload)}`);
 
     try {
+      this.logger.log(`Fazendo requisição para Evolution API`, {
+        url: sendUrl,
+        method: 'POST',
+        hasApiKey: !!apiToken,
+        apiKeyLength: apiToken?.length || 0,
+        payload: JSON.stringify(payload),
+      });
+
       const response = await axios.post(
         sendUrl,
         payload,
@@ -395,10 +424,14 @@ export class MessagesService {
             apikey: apiToken,
             'Content-Type': 'application/json',
           },
+          timeout: 30000, // 30 segundos
         },
       );
 
-      this.logger.log(`Resposta da Evolution API: ${JSON.stringify(response.data)}`);
+      this.logger.log(`Resposta da Evolution API: ${JSON.stringify(response.data)}`, {
+        status: response.status,
+        statusText: response.statusText,
+      });
 
       // A Evolution API retorna o ID da mensagem em key.id
       const externalId = response.data?.key?.id || response.data?.id || `evol_${Date.now()}`;
@@ -418,15 +451,32 @@ export class MessagesService {
         externalId,
       });
     } catch (error: any) {
-      this.logger.error('Erro ao enviar mensagem na Evolution API', {
+      const errorDetails = {
         error: error.message,
+        errorStack: error.stack,
         url: sendUrl,
-        payload,
-        response: error.response?.data,
-        status: error.response?.status,
-        statusText: error.response?.statusText,
-        headers: error.response?.headers,
-      });
+        payload: JSON.stringify(payload),
+        phoneOriginal: conversation.contact.phone,
+        phoneNormalized: phone,
+        instanceName,
+        serverUrl,
+        hasApiToken: !!apiToken,
+        apiTokenLength: apiToken?.length || 0,
+        responseData: error.response?.data ? JSON.stringify(error.response.data) : null,
+        responseStatus: error.response?.status,
+        responseStatusText: error.response?.statusText,
+        responseHeaders: error.response?.headers ? JSON.stringify(error.response.headers) : null,
+        requestConfig: {
+          url: sendUrl,
+          method: 'POST',
+          headers: {
+            apikey: apiToken ? `${apiToken.substring(0, 10)}...` : 'MISSING',
+            'Content-Type': 'application/json',
+          },
+        },
+      };
+
+      this.logger.error('Erro ao enviar mensagem na Evolution API', errorDetails);
 
       // Se for 404, pode ser que o endpoint esteja errado ou a instância não existe
       if (error.response?.status === 404) {
@@ -438,6 +488,18 @@ export class MessagesService {
         });
         throw new BadRequestException(
           `Instância '${instanceName}' não encontrada na Evolution API ou endpoint incorreto. Verifique se a instância existe e está conectada. Erro: ${errorMessage}`,
+        );
+      }
+
+      // Se for 400, pode ser formato incorreto do telefone ou payload
+      if (error.response?.status === 400) {
+        const errorMessage = error.response?.data?.message || error.response?.data?.error || error.message;
+        this.logger.error(`Erro 400 - Bad Request da Evolution API`, {
+          ...errorDetails,
+          evolutionError: errorMessage,
+        });
+        throw new BadRequestException(
+          `Falha ao enviar mensagem na Evolution API: ${errorMessage}. Verifique o formato do telefone (original: ${conversation.contact.phone}, normalizado: ${phone}) e se a instância está conectada.`,
         );
       }
 
