@@ -229,7 +229,8 @@ export class WebhooksService {
       return;
     }
 
-    const rawPhone = data.key?.remoteJid?.replace('@s.whatsapp.net', '') || '';
+    // Remover qualquer sufixo após @ (ex: @s.whatsapp.net, @lid, @g.us, etc)
+    const rawPhone = data.key?.remoteJid?.split('@')[0] || '';
     const contactPhone = this.normalizePhone(rawPhone);
     
     this.logger.log(`Telefone normalizado: ${contactPhone}`, {
@@ -839,10 +840,21 @@ export class WebhooksService {
   }
 
   private normalizePhone(phone: string): string {
-    const cleaned = phone.replace(/[^\d+]/g, '');
+    if (!phone) {
+      return '';
+    }
+    
+    // Remover qualquer sufixo após @ (caso ainda tenha)
+    const withoutSuffix = phone.split('@')[0];
+    
+    // Manter apenas dígitos e +
+    const cleaned = withoutSuffix.replace(/[^\d+]/g, '');
+    
+    // Se não começa com + e tem pelo menos 10 dígitos, adicionar +
     if (!cleaned.startsWith('+') && cleaned.length >= 10) {
       return `+${cleaned}`;
     }
+    
     return cleaned;
   }
 
