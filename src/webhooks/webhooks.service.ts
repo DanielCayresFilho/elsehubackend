@@ -229,12 +229,14 @@ export class WebhooksService {
       return;
     }
 
-    const contactPhone = this.normalizePhone(
-      data.key?.remoteJid?.replace('@s.whatsapp.net', '') || '',
-    );
+    const rawPhone = data.key?.remoteJid?.replace('@s.whatsapp.net', '') || '';
+    const contactPhone = this.normalizePhone(rawPhone);
     
     this.logger.log(`Telefone normalizado: ${contactPhone}`, {
       original: data.key?.remoteJid,
+      rawPhone,
+      normalized: contactPhone,
+      instance,
     });
     
     const mediaPayload = this.extractEvolutionMediaPayload(data, serviceInstance);

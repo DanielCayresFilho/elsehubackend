@@ -60,6 +60,9 @@ export class MessagesService {
       serviceInstanceName: conversation.serviceInstance?.name,
       serviceInstanceActive: conversation.serviceInstance?.isActive,
       provider: conversation.serviceInstance?.provider,
+      contactId: conversation.contactId,
+      contactPhone: conversation.contact.phone,
+      contactName: conversation.contact.name,
     });
 
     if (conversation.status !== ChatStatus.OPEN) {
@@ -493,14 +496,35 @@ export class MessagesService {
 
       // Se for 400, pode ser formato incorreto do telefone ou payload
       if (error.response?.status === 400) {
-        const errorMessage = error.response?.data?.message || error.response?.data?.error || error.message;
+        const responseData = error.response?.data;
+        let errorMessage = responseData?.error || error.message;
+        let detailedMessage = '';
+
+        // Verificar se a resposta indica que o número não existe no WhatsApp
+        if (responseData?.response?.message) {
+          const messageInfo = Array.isArray(responseData.response.message) 
+            ? responseData.response.message[0] 
+            : responseData.response.message;
+          
+          if (messageInfo?.exists === false) {
+            errorMessage = `O número ${phone} não está registrado no WhatsApp ou não existe`;
+            detailedMessage = `O número de telefone ${conversation.contact.phone} (normalizado: ${phone}) não está registrado no WhatsApp. Verifique se o número está correto e se o contato possui uma conta WhatsApp ativa.`;
+          } else if (messageInfo?.number) {
+            detailedMessage = `Detalhes: número ${messageInfo.number}, JID: ${messageInfo.jid || 'N/A'}, existe: ${messageInfo.exists !== undefined ? messageInfo.exists : 'N/A'}`;
+          }
+        }
+
         this.logger.error(`Erro 400 - Bad Request da Evolution API`, {
           ...errorDetails,
           evolutionError: errorMessage,
+          detailedMessage,
+          responseData: JSON.stringify(responseData),
         });
-        throw new BadRequestException(
-          `Falha ao enviar mensagem na Evolution API: ${errorMessage}. Verifique o formato do telefone (original: ${conversation.contact.phone}, normalizado: ${phone}) e se a instância está conectada.`,
-        );
+
+        const finalMessage = detailedMessage || 
+          `Falha ao enviar mensagem na Evolution API: ${errorMessage}. Verifique o formato do telefone (original: ${conversation.contact.phone}, normalizado: ${phone}) e se a instância está conectada.`;
+
+        throw new BadRequestException(finalMessage);
       }
 
       throw new BadRequestException(
