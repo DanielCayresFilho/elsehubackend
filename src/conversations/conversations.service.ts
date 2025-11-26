@@ -186,6 +186,14 @@ export class ConversationsService {
       },
     });
 
+    // Atualizar timestamp do operador para distribuição justa
+    await this.prisma.user.update({
+      where: { id: payload.operatorId },
+      data: {
+        lastConversationAssignedAt: new Date(),
+      },
+    });
+
     return this.toResponse(updated);
   }
 

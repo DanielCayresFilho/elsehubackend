@@ -212,6 +212,205 @@ export class ReportsService {
     return result;
   }
 
+  async exportStatisticsCsv(query: ReportQueryDto): Promise<string> {
+    const statistics = await this.getStatistics(query);
+
+    const csvStringifier = createObjectCsvStringifier({
+      header: [
+        { id: 'metric', title: 'Métrica' },
+        { id: 'value', title: 'Valor' },
+      ],
+    });
+
+    const records = [
+      { metric: 'Total de Conversas', value: statistics.totalConversations },
+      { metric: 'Duração Média (segundos)', value: statistics.avgDurationSeconds },
+      { metric: 'Tempo Médio de Resposta (segundos)', value: statistics.avgResponseTimeSeconds },
+      ...statistics.tabulationStats.map((tab) => ({
+        metric: `Tabulação: ${tab.tabulationName}`,
+        value: tab.count,
+      })),
+    ];
+
+    const csvContent =
+      csvStringifier.getHeaderString() +
+      csvStringifier.stringifyRecords(records);
+
+    return csvContent;
+  }
+
+  async exportOperatorPerformanceCsv(query: ReportQueryDto): Promise<string> {
+    const performance = await this.getOperatorPerformance(query);
+
+    const csvStringifier = createObjectCsvStringifier({
+      header: [
+        { id: 'operatorName', title: 'Nome do Operador' },
+        { id: 'totalConversations', title: 'Total de Conversas' },
+        { id: 'avgDuration', title: 'Duração Média (s)' },
+        { id: 'avgResponseTime', title: 'Tempo Médio de Resposta (s)' },
+      ],
+    });
+
+    const csvContent =
+      csvStringifier.getHeaderString() +
+      csvStringifier.stringifyRecords(performance);
+
+    return csvContent;
+  }
+
+  async exportCampaignsCsv(query: ReportQueryDto): Promise<string> {
+    const where: Prisma.CampaignWhereInput = {};
+
+    if (query.startDate || query.endDate) {
+      where.createdAt = {};
+      if (query.startDate) {
+        where.createdAt.gte = new Date(query.startDate);
+      }
+      if (query.endDate) {
+        where.createdAt.lte = new Date(query.endDate);
+      }
+    }
+
+    if (query.serviceInstanceId) {
+      where.serviceInstanceId = query.serviceInstanceId;
+    }
+
+    const campaigns = await this.prisma.campaign.findMany({
+      where,
+      include: {
+        serviceInstance: true,
+        template: true,
+        supervisor: true,
+        items: {
+          select: {
+            status: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const records = campaigns.map((campaign) => {
+      const items = campaign.items || [];
+      const totalContacts = items.length;
+      const sentCount = items.filter((i) => i.status === 'SENT').length;
+      const failedCount = items.filter((i) => i.status === 'FAILED').length;
+      const pendingCount = items.filter((i) => i.status === 'PENDING').length;
+
+      return {
+        name: campaign.name,
+        serviceInstanceName: campaign.serviceInstance?.name || 'N/A',
+        templateName: campaign.template?.name || 'N/A',
+        supervisorName: campaign.supervisor?.name || 'N/A',
+        status: campaign.status,
+        delaySeconds: campaign.delaySeconds,
+        totalContacts,
+        sentCount,
+        failedCount,
+        pendingCount,
+        createdAt: campaign.createdAt.toISOString(),
+        startedAt: campaign.startedAt?.toISOString() || 'N/A',
+        finishedAt: campaign.finishedAt?.toISOString() || 'N/A',
+      };
+    });
+
+    const csvStringifier = createObjectCsvStringifier({
+      header: [
+        { id: 'name', title: 'Nome da Campanha' },
+        { id: 'serviceInstanceName', title: 'Instância' },
+        { id: 'templateName', title: 'Template' },
+        { id: 'supervisorName', title: 'Supervisor' },
+        { id: 'status', title: 'Status' },
+        { id: 'delaySeconds', title: 'Delay (s)' },
+        { id: 'totalContacts', title: 'Total de Contatos' },
+        { id: 'sentCount', title: 'Enviadas' },
+        { id: 'failedCount', title: 'Falhadas' },
+        { id: 'pendingCount', title: 'Pendentes' },
+        { id: 'createdAt', title: 'Criada em' },
+        { id: 'startedAt', title: 'Iniciada em' },
+        { id: 'finishedAt', title: 'Finalizada em' },
+      ],
+    });
+
+    const csvContent =
+      csvStringifier.getHeaderString() +
+      csvStringifier.stringifyRecords(records);
+
+    return csvContent;
+  }
+
+  async exportMessagesCsv(query: ReportQueryDto): Promise<string> {
+    const where: Prisma.MessageWhereInput = {};
+
+    if (query.startDate || query.endDate) {
+      where.createdAt = {};
+      if (query.startDate) {
+        where.createdAt.gte = new Date(query.startDate);
+      }
+      if (query.endDate) {
+        where.createdAt.lte = new Date(query.endDate);
+      }
+    }
+
+    if (query.serviceInstanceId) {
+      where.conversation = {
+        serviceInstanceId: query.serviceInstanceId,
+      };
+    }
+
+    const messages = await this.prisma.message.findMany({
+      where,
+      include: {
+        conversation: {
+          include: {
+            contact: true,
+            serviceInstance: true,
+            operator: true,
+          },
+        },
+        sender: true,
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 10000, // Limite para evitar arquivos muito grandes
+    });
+
+    const records = messages.map((message) => ({
+      id: message.id,
+      contactName: message.conversation.contact?.name || 'N/A',
+      contactPhone: message.conversation.contact?.phone || 'N/A',
+      operatorName: message.sender?.name || message.conversation.operator?.name || 'Sistema',
+      serviceInstanceName: message.conversation.serviceInstance?.name || 'N/A',
+      direction: message.direction,
+      via: message.via,
+      content: message.content.substring(0, 200), // Limitar tamanho do conteúdo
+      status: message.status || 'N/A',
+      createdAt: message.createdAt.toISOString(),
+      hasMedia: message.mediaUrl ? 'Sim' : 'Não',
+    }));
+
+    const csvStringifier = createObjectCsvStringifier({
+      header: [
+        { id: 'id', title: 'ID' },
+        { id: 'contactName', title: 'Nome do Contato' },
+        { id: 'contactPhone', title: 'Telefone' },
+        { id: 'operatorName', title: 'Operador' },
+        { id: 'serviceInstanceName', title: 'Instância' },
+        { id: 'direction', title: 'Direção' },
+        { id: 'via', title: 'Via' },
+        { id: 'content', title: 'Conteúdo' },
+        { id: 'status', title: 'Status' },
+        { id: 'hasMedia', title: 'Tem Mídia' },
+        { id: 'createdAt', title: 'Data/Hora' },
+      ],
+    });
+
+    const csvContent =
+      csvStringifier.getHeaderString() +
+      csvStringifier.stringifyRecords(records);
+
+    return csvContent;
+  }
+
   private toResponse(conv: any): FinishedConversationResponseDto {
     return {
       id: conv.id,

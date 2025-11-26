@@ -94,7 +94,7 @@ export class ServiceInstancesService {
     const instance = await this.prisma.serviceInstance.create({
       data: {
         name: payload.name.trim(),
-        phone: payload.phone.trim(),
+        phone: payload.phone?.trim() ?? null,
         provider: payload.provider,
         credentials: payload.credentials,
       },
@@ -325,15 +325,27 @@ export class ServiceInstancesService {
       this.validateCredentials(instance.provider, payload.credentials);
     }
 
+    const updateData: any = {};
+    
+    if (payload.name !== undefined) {
+      updateData.name = payload.name.trim();
+    }
+    if (payload.phone !== undefined) {
+      updateData.phone = payload.phone?.trim() ?? null;
+    }
+    if (payload.provider !== undefined) {
+      updateData.provider = payload.provider;
+    }
+    if (payload.credentials !== undefined) {
+      updateData.credentials = payload.credentials;
+    }
+    if (payload.isActive !== undefined) {
+      updateData.isActive = payload.isActive;
+    }
+
     const updated = await this.prisma.serviceInstance.update({
       where: { id },
-      data: {
-        name: payload.name?.trim(),
-        phone: payload.phone?.trim(),
-        provider: payload.provider,
-        credentials: payload.credentials,
-        isActive: payload.isActive,
-      },
+      data: updateData,
     });
 
     return this.toResponse(updated);

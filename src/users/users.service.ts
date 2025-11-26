@@ -2,19 +2,32 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  Logger,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
-import { User } from '@prisma/client';
+import { User, ChatStatus } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UserResponseDto } from './dto/user-response.dto';
 import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { ConversationsService } from '../conversations/conversations.service';
+import { ChatGateway } from '../websockets/chat.gateway';
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(UsersService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    @Inject(forwardRef(() => ConversationsService))
+    private readonly conversationsService: ConversationsService,
+    @Inject(forwardRef(() => ChatGateway))
+    private readonly chatGateway: ChatGateway,
+  ) {}
 
   async create(payload: CreateUserDto): Promise<UserResponseDto> {
     console.log('[UsersService] Creating user:', {
@@ -141,7 +154,69 @@ export class UsersService {
       },
     });
 
+    // Se o operador ficou online, tentar atribuir conversas da fila
+    if (isOnline && (user.role === 'OPERATOR' || user.role === 'SUPERVISOR')) {
+      await this.assignQueuedConversationsToOperator(userId);
+    }
+
     return this.toResponse(updated);
+  }
+
+  /**
+   * Atribui conversas da fila para um operador que acabou de ficar online
+   */
+  private async assignQueuedConversationsToOperator(operatorId: string): Promise<void> {
+    try {
+      // Buscar conversas na fila (sem operador atribuído)
+      const queuedConversations = await this.prisma.conversation.findMany({
+        where: {
+          status: ChatStatus.OPEN,
+          operatorId: null,
+        },
+        orderBy: { startTime: 'asc' }, // Mais antigas primeiro
+        take: 1, // Atribuir apenas uma por vez para distribuir melhor
+      });
+
+      if (queuedConversations.length === 0) {
+        this.logger.log(`Nenhuma conversa na fila para atribuir ao operador ${operatorId}`);
+        return;
+      }
+
+      const conversation = queuedConversations[0];
+
+      // Atribuir conversa ao operador
+      await this.conversationsService.assignOperator(conversation.id, {
+        operatorId,
+      });
+
+      // Atualizar timestamp do operador
+      await this.prisma.user.update({
+        where: { id: operatorId },
+        data: {
+          lastConversationAssignedAt: new Date(),
+        },
+      });
+
+      this.logger.log(
+        `Conversa ${conversation.id} atribuída automaticamente ao operador ${operatorId} ao ficar online`,
+      );
+
+      // Notificar via WebSocket
+      const updatedConversation = await this.conversationsService.findOne(conversation.id);
+      this.chatGateway.emitConversationUpdate(conversation.id, updatedConversation);
+
+      // Notificar o operador especificamente
+      this.chatGateway.server.emit('conversation:assigned', {
+        conversationId: conversation.id,
+        operatorId,
+        conversation: updatedConversation,
+      });
+    } catch (error) {
+      this.logger.error(
+        `Erro ao atribuir conversas da fila ao operador ${operatorId}: ${error.message}`,
+        error.stack,
+      );
+    }
   }
 
   async getOnlineOperators(): Promise<UserResponseDto[]> {

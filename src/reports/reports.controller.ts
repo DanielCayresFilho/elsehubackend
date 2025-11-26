@@ -42,5 +42,65 @@ export class ReportsController {
   getOperatorPerformance(@Query() query: ReportQueryDto) {
     return this.reportsService.getOperatorPerformance(query);
   }
+
+  @Get('statistics/export')
+  @Roles(Role.ADMIN, Role.SUPERVISOR)
+  async exportStatistics(
+    @Query() query: ReportQueryDto,
+    @Res() res: Response,
+  ) {
+    const csvContent = await this.reportsService.exportStatisticsCsv(query);
+    const timestamp = new Date().toISOString().split('T')[0];
+    const filename = `estatisticas-gerais-${timestamp}.csv`;
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(csvContent);
+  }
+
+  @Get('operator-performance/export')
+  @Roles(Role.ADMIN, Role.SUPERVISOR)
+  async exportOperatorPerformance(
+    @Query() query: ReportQueryDto,
+    @Res() res: Response,
+  ) {
+    const csvContent = await this.reportsService.exportOperatorPerformanceCsv(query);
+    const timestamp = new Date().toISOString().split('T')[0];
+    const filename = `performance-operadores-${timestamp}.csv`;
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(csvContent);
+  }
+
+  @Get('campaigns/export')
+  @Roles(Role.ADMIN, Role.SUPERVISOR)
+  async exportCampaigns(
+    @Query() query: ReportQueryDto,
+    @Res() res: Response,
+  ) {
+    const csvContent = await this.reportsService.exportCampaignsCsv(query);
+    const timestamp = new Date().toISOString().split('T')[0];
+    const filename = `relatorio-campanhas-${timestamp}.csv`;
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(csvContent);
+  }
+
+  @Get('messages/export')
+  @Roles(Role.ADMIN, Role.SUPERVISOR)
+  async exportMessages(
+    @Query() query: ReportQueryDto,
+    @Res() res: Response,
+  ) {
+    const csvContent = await this.reportsService.exportMessagesCsv(query);
+    const timestamp = new Date().toISOString().split('T')[0];
+    const filename = `relatorio-mensagens-${timestamp}.csv`;
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(csvContent);
+  }
 }
 
