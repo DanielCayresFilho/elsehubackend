@@ -23,6 +23,7 @@ import { WebsocketsModule } from './websockets/websockets.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
 import { CampaignsModule } from './campaigns/campaigns.module';
 import { ReportsModule } from './reports/reports.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 import { LoggerModule } from './logger/logger.module';
 import { SchedulerModule } from './scheduler/scheduler.module';
 import { HttpLoggerMiddleware } from './logger/http-logger.middleware';
@@ -71,6 +72,7 @@ import { RolesGuard } from './common/guards/roles.guard';
     WebhooksModule,
     CampaignsModule,
     ReportsModule,
+    DashboardModule,
     SchedulerModule,
   ],
   controllers: [AppController],

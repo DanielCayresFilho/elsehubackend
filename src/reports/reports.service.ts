@@ -143,10 +143,20 @@ export class ReportsService {
       count: tabulationCounts[tab.id],
     }));
 
+    // Calcular taxa de resposta
+    const conversationsWithResponse = conversations.filter(
+      (c) => c.avgResponseTimeOperator !== null && c.avgResponseTimeOperator > 0,
+    ).length;
+    const responseRate =
+      totalConversations > 0
+        ? Math.round((conversationsWithResponse / totalConversations) * 100)
+        : 0;
+
     return {
       totalConversations,
       avgDurationSeconds: Math.round(avgDuration),
       avgResponseTimeSeconds: Math.round(avgResponseTime),
+      responseRate,
       tabulationStats,
     };
   }
@@ -171,6 +181,37 @@ export class ReportsService {
       },
     });
 
+    // Buscar mensagens dos operadores no período
+    const messageWhere: Prisma.MessageWhereInput = {
+      direction: 'OUTBOUND',
+      senderId: { not: null },
+    };
+
+    if (query.startDate || query.endDate) {
+      messageWhere.createdAt = {};
+      if (query.startDate) {
+        messageWhere.createdAt.gte = new Date(query.startDate);
+      }
+      if (query.endDate) {
+        messageWhere.createdAt.lte = new Date(query.endDate);
+      }
+    }
+
+    const messages = await this.prisma.message.findMany({
+      where: messageWhere,
+      select: {
+        senderId: true,
+      },
+    });
+
+    // Contar mensagens por operador
+    const messageCounts: Record<string, number> = {};
+    messages.forEach((msg) => {
+      if (msg.senderId) {
+        messageCounts[msg.senderId] = (messageCounts[msg.senderId] || 0) + 1;
+      }
+    });
+
     // Agrupar por operador
     const operatorStats: Record<
       string,
@@ -178,6 +219,7 @@ export class ReportsService {
         operatorId: string;
         operatorName: string;
         totalConversations: number;
+        totalMessages: number;
         avgDuration: number;
         avgResponseTime: number;
       }
@@ -189,6 +231,7 @@ export class ReportsService {
           operatorId: conv.operatorId,
           operatorName: conv.operatorName,
           totalConversations: 0,
+          totalMessages: messageCounts[conv.operatorId] || 0,
           avgDuration: 0,
           avgResponseTime: 0,
         };
