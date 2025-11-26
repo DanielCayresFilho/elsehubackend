@@ -232,11 +232,35 @@ export class WebhooksService {
     // Remover qualquer sufixo após @ (ex: @s.whatsapp.net, @lid, @g.us, etc)
     const rawPhone = data.key?.remoteJid?.split('@')[0] || '';
     const contactPhone = this.normalizePhone(rawPhone);
+    const remoteJidSuffix = data.key?.remoteJid?.split('@')[1] || '';
+    
+    // Log de alerta se o número parece incorreto ou vem com sufixo diferente de @s.whatsapp.net
+    if (remoteJidSuffix && remoteJidSuffix !== 's.whatsapp.net') {
+      this.logger.warn(`⚠️ ATENÇÃO: remoteJid com sufixo incomum: ${data.key?.remoteJid}`, {
+        original: data.key?.remoteJid,
+        suffix: remoteJidSuffix,
+        normalized: contactPhone,
+        instance,
+        pushName: data.pushName,
+      });
+    }
+    
+    // Verificar se o número parece ser um número brasileiro válido (deve começar com 55)
+    const isBrazilianNumber = contactPhone.startsWith('+55') || contactPhone.startsWith('55');
+    if (!isBrazilianNumber && contactPhone.length > 10) {
+      this.logger.warn(`⚠️ ATENÇÃO: Número não parece ser brasileiro: ${contactPhone}`, {
+        original: data.key?.remoteJid,
+        normalized: contactPhone,
+        instance,
+        pushName: data.pushName,
+      });
+    }
     
     this.logger.log(`Telefone normalizado: ${contactPhone}`, {
       original: data.key?.remoteJid,
       rawPhone,
       normalized: contactPhone,
+      suffix: remoteJidSuffix,
       instance,
     });
     
@@ -260,12 +284,28 @@ export class WebhooksService {
     });
 
     if (!contact) {
+      this.logger.log(`Criando novo contato: ${contactPhone}`, {
+        name: data.pushName || contactPhone,
+        phone: contactPhone,
+      });
       contact = await this.prisma.contact.create({
         data: {
           name: data.pushName || contactPhone,
           phone: contactPhone,
         },
       });
+    } else {
+      // Se o contato existe mas o nome mudou, atualizar
+      if (data.pushName && data.pushName !== contact.name) {
+        this.logger.log(`Atualizando nome do contato: ${contactPhone}`, {
+          oldName: contact.name,
+          newName: data.pushName,
+        });
+        contact = await this.prisma.contact.update({
+          where: { id: contact.id },
+          data: { name: data.pushName },
+        });
+      }
     }
 
       // Buscar conversa aberta existente ou criar nova
