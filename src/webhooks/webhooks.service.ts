@@ -198,13 +198,28 @@ export class WebhooksService {
   private async processEvolutionMessage(payload: EvolutionWebhookDto): Promise<void> {
     const { instance, data } = payload;
 
-    this.logger.log(`Processando mensagem Evolution`, {
+    // Log completo de todos os campos disponíveis
+    this.logger.log(`Processando mensagem Evolution - Todos os campos disponíveis`, {
       instance,
       fromMe: data.key?.fromMe,
       remoteJid: data.key?.remoteJid,
       hasMessage: !!data.message,
       messageType: data.messageType,
       messageKeys: data.message ? Object.keys(data.message) : [],
+      // Campos do payload raiz que podem conter informações
+      sender: payload.sender,
+      destination: payload.destination,
+      date_time: payload.date_time,
+      // Campos do data que podem conter informações
+      pushName: data.pushName,
+      messageTimestamp: data.messageTimestamp,
+      instanceId: data.instanceId,
+      source: data.source,
+      status: data.status,
+      // Verificar se há outros campos no key
+      keyKeys: data.key ? Object.keys(data.key) : [],
+      // Log completo do data para ver todos os campos
+      dataFull: JSON.stringify(data, null, 2),
     });
 
     if (data.key?.fromMe) {
@@ -300,17 +315,38 @@ export class WebhooksService {
     });
 
     if (!contact) {
-      this.logger.log(`Criando novo contato: ${contactPhone}`, {
+      this.logger.log(`📝 Criando novo contato: ${contactPhone}`, {
         name: data.pushName || contactPhone,
         phone: contactPhone,
+        remoteJid: data.key?.remoteJid,
+        instance,
       });
-      contact = await this.prisma.contact.create({
-        data: {
-          name: data.pushName || contactPhone,
+      try {
+        contact = await this.prisma.contact.create({
+          data: {
+            name: data.pushName || contactPhone,
+            phone: contactPhone,
+          },
+        });
+        this.logger.log(`✅ Contato criado com sucesso: ${contact.id}`, {
+          contactId: contact.id,
+          phone: contact.phone,
+        });
+      } catch (error: any) {
+        this.logger.error(`❌ Erro ao criar contato: ${error.message}`, {
           phone: contactPhone,
-        },
-      });
+          error: error.message,
+          stack: error.stack,
+        });
+        // Se falhar ao criar contato, não podemos processar a mensagem
+        throw error;
+      }
     } else {
+      this.logger.log(`📋 Contato já existe: ${contact.id}`, {
+        contactId: contact.id,
+        phone: contact.phone,
+        name: contact.name,
+      });
       // Se o contato existe mas o nome mudou, atualizar
       if (data.pushName && data.pushName !== contact.name) {
         this.logger.log(`Atualizando nome do contato: ${contactPhone}`, {

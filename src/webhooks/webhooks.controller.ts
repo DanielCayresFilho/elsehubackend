@@ -59,12 +59,28 @@ export class WebhooksController {
   @Post('evolution')
   @HttpCode(HttpStatus.OK)
   async handleEvolutionWebhook(@Body() payload: EvolutionWebhookDto) {
-    this.logger.log('Webhook Evolution recebido', {
+    // Log completo do payload para debug
+    this.logger.log('Webhook Evolution recebido - Payload completo', {
       event: payload.event,
       instance: payload.instance,
       hasData: !!payload.data,
       remoteJid: payload.data?.key?.remoteJid,
       fromMe: payload.data?.key?.fromMe,
+      // Campos opcionais que podem conter informações úteis
+      sender: payload.sender,
+      destination: payload.destination,
+      date_time: payload.date_time,
+      server_url: payload.server_url,
+      // Todos os campos do data
+      dataKeys: payload.data ? Object.keys(payload.data) : [],
+      pushName: payload.data?.pushName,
+      messageType: payload.data?.messageType,
+      messageTimestamp: payload.data?.messageTimestamp,
+      instanceId: payload.data?.instanceId,
+      source: payload.data?.source,
+      status: payload.data?.status,
+      // Log completo do payload (serializado para evitar problemas de referência circular)
+      fullPayload: JSON.stringify(payload, null, 2),
     });
     
     try {
