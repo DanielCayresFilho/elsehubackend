@@ -17,15 +17,25 @@ def login(email, password):
         json={"email": email, "password": password}
     )
     
-    if response.status_code != 200:
+    # Aceitar tanto 200 quanto 201 como sucesso
+    if response.status_code not in [200, 201]:
         print(f"❌ Erro no login: {response.status_code}")
         print(response.text)
         sys.exit(1)
     
     data = response.json()
-    token = data.get("tokens", {}).get("accessToken")
+    
+    # Tentar diferentes estruturas de resposta
+    token = None
+    if "tokens" in data:
+        token = data["tokens"].get("accessToken")
+    elif "accessToken" in data:
+        token = data.get("accessToken")
+    
     if not token:
-        token = data.get("accessToken")  # Fallback
+        print(f"❌ Token não encontrado na resposta:")
+        print(json.dumps(data, indent=2))
+        sys.exit(1)
     
     print("✅ Login realizado com sucesso!")
     return token
@@ -38,7 +48,8 @@ def get_service_instances(token):
         headers={"Authorization": f"Bearer {token}"}
     )
     
-    if response.status_code != 200:
+    # Aceitar tanto 200 quanto 201 como sucesso
+    if response.status_code not in [200, 201]:
         print(f"❌ Erro ao buscar instâncias: {response.status_code}")
         print(response.text)
         return None
@@ -103,7 +114,8 @@ def upload_csv(token, campaign_id, csv_file):
             files=files
         )
     
-    if response.status_code != 200:
+    # Aceitar tanto 200 quanto 201 como sucesso
+    if response.status_code not in [200, 201]:
         print(f"❌ Erro ao fazer upload: {response.status_code}")
         print(response.text)
         return False
@@ -121,7 +133,8 @@ def start_campaign(token, campaign_id):
         headers={"Authorization": f"Bearer {token}"}
     )
     
-    if response.status_code != 200:
+    # Aceitar tanto 200 quanto 201 como sucesso
+    if response.status_code not in [200, 201]:
         print(f"❌ Erro ao iniciar campanha: {response.status_code}")
         print(response.text)
         return False
